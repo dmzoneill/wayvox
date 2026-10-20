@@ -13,8 +13,15 @@ import pytest
 # ---------------------------------------------------------------------------
 # Module-level mocking: openvino_genai and librosa must be mocked BEFORE
 # importing server-native, because the module creates global ModelManager
-# and LLMManager instances (and calls load_model) at import time.
+# and LLMManager instances at import time.
+#
+# CI has no NPU and no OpenVINO. Auto-detect would select faster-whisper and
+# these tests (WhisperPipeline, generate/streamer, LLMPipeline) would miss.
+# Pin the device the suite mocks. Backend imports live under __main__, so
+# bind the mocks onto the module after import.
 # ---------------------------------------------------------------------------
+
+os.environ["WHISPER_DEVICE"] = "NPU"
 
 _mock_ov = MagicMock()
 _mock_librosa = MagicMock()
@@ -39,6 +46,8 @@ for _p in _patches:
     _p.start()
 
 server_mod = importlib.import_module("server-native")
+server_mod._openvino_genai = _mock_ov
+server_mod._openvino_genai_for_llm = _mock_ov
 
 for _p in _patches:
     _p.stop()
@@ -56,12 +65,19 @@ app = server_mod.app
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _reset_mocks():
     """Reset shared mocks between tests so state doesn't leak."""
     _mock_ov.reset_mock()
     _mock_librosa.reset_mock()
     _mock_librosa.load.return_value = (np.zeros(16000, dtype=np.float32), 16000)
+    server_mod._openvino_genai = _mock_ov
+    server_mod._openvino_genai_for_llm = _mock_ov
+    server_mod._faster_whisper_cls = None
+    server_mod.ENGINE = "openvino"
+    server_mod.DEVICE = "NPU"
+    server_mod.LLM_DEVICE = "NPU"
     # Reset global metrics so state from earlier tests doesn't break /metrics
     m = server_mod.metrics
     m.transcription_count = 0
@@ -104,9 +120,11 @@ def model_mgr(tmp_path):
     """ModelManager wired to a temp models directory."""
     mgr = ModelManager.__new__(ModelManager)
     mgr.models_dir = str(tmp_path / "models")
+    mgr.ct2_models_dir = str(tmp_path / "ct2-models")
     mgr.pipelines = {}
     mgr.default_model = "whisper-small-en"
     os.makedirs(mgr.models_dir, exist_ok=True)
+    os.makedirs(mgr.ct2_models_dir, exist_ok=True)
     return mgr
 
 
@@ -124,6 +142,7 @@ def llm_mgr(tmp_path):
 # ===================================================================
 #  1. MetricsCollector
 # ===================================================================
+
 
 class TestMetricsCollector:
     def test_initial_snapshot(self, fresh_metrics):
@@ -199,6 +218,7 @@ class TestMetricsCollector:
 #  2. ModelManager
 # ===================================================================
 
+
 class TestModelManager:
     def test_list_models_with_models(self, model_mgr):
         os.makedirs(os.path.join(model_mgr.models_dir, "whisper-small-en"))
@@ -242,6 +262,7 @@ class TestModelManager:
 # ===================================================================
 #  3. LLMManager
 # ===================================================================
+
 
 class TestLLMManager:
     def test_init_with_env_model(self, tmp_path):
@@ -363,6 +384,7 @@ class TestLLMManager:
 #  4. _extract_perf_metrics
 # ===================================================================
 
+
 class TestExtractPerfMetrics:
     def test_success(self):
         mock_pm = MagicMock()
@@ -397,6 +419,7 @@ class TestExtractPerfMetrics:
 #  5-20. Flask route tests
 # ===================================================================
 
+
 class TestHealthRoute:
     def test_health(self, client):
         resp = client.get("/health")
@@ -408,9 +431,7 @@ class TestHealthRoute:
 
 class TestModelsRoute:
     def test_list_models(self, client):
-        server_mod.model_manager.list_models = MagicMock(
-            return_value=["whisper-small-en", "whisper-large-v3"]
-        )
+        server_mod.model_manager.list_models = MagicMock(return_value=["whisper-small-en", "whisper-large-v3"])
         resp = client.get("/models")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -425,8 +446,13 @@ class TestDefaultModelRoute:
         assert "model" in data
 
     def test_set_default_model_missing_body(self, client):
-        resp = client.put("/model/default", content_type="application/json")
+        resp = client.put(
+            "/model/default",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
         assert resp.status_code == 400
+        assert "model" in resp.get_json()["error"]
 
     def test_set_default_model_not_found(self, client):
         server_mod.model_manager.list_models = MagicMock(return_value=["a"])
@@ -438,9 +464,7 @@ class TestDefaultModelRoute:
         assert resp.status_code == 404
 
     def test_set_default_model_success(self, client):
-        server_mod.model_manager.list_models = MagicMock(
-            return_value=["whisper-small-en"]
-        )
+        server_mod.model_manager.list_models = MagicMock(return_value=["whisper-small-en"])
         server_mod.model_manager.load_model = MagicMock()
         resp = client.put(
             "/model/default",
@@ -470,9 +494,7 @@ class TestTranscribeRoute:
         assert data["text"] == "hello world"
 
     def test_exception(self, client, wav_bytes):
-        server_mod.model_manager.load_model = MagicMock(
-            side_effect=RuntimeError("device error")
-        )
+        server_mod.model_manager.load_model = MagicMock(side_effect=RuntimeError("device error"))
         resp = client.post("/transcribe", data=wav_bytes)
         assert resp.status_code == 500
         assert "device error" in resp.get_json()["error"]
@@ -485,18 +507,14 @@ class TestTranscribeWithModelRoute:
         server_mod.model_manager.load_model = MagicMock(return_value=mock_pipeline)
         _mock_librosa.load.return_value = (np.zeros(16000, dtype=np.float32), 16000)
 
-        resp = client.post(
-            "/transcribe/whisper-small-en?language=fr", data=wav_bytes
-        )
+        resp = client.post("/transcribe/whisper-small-en?language=fr", data=wav_bytes)
         assert resp.status_code == 200
         # Verify language kwarg was passed
         call_kwargs = mock_pipeline.generate.call_args[1]
         assert call_kwargs["language"] == "<|fr|>"
 
     def test_model_not_found(self, client, wav_bytes):
-        server_mod.model_manager.load_model = MagicMock(
-            side_effect=FileNotFoundError("not found")
-        )
+        server_mod.model_manager.load_model = MagicMock(side_effect=FileNotFoundError("not found"))
         resp = client.post("/transcribe/bad-model", data=wav_bytes)
         assert resp.status_code == 500
         assert "not found" in resp.get_json()["error"]
@@ -543,11 +561,7 @@ class TestTranscribeStreamRoute:
 
         # Parse SSE events from response data
         raw = resp.get_data(as_text=True)
-        events = [
-            line[len("data: "):]
-            for line in raw.split("\n")
-            if line.startswith("data: ")
-        ]
+        events = [line[len("data: ") :] for line in raw.split("\n") if line.startswith("data: ")]
         assert len(events) >= 2  # chunk events + done event
         # Last event should have done: true
         last = json.loads(events[-1])
@@ -610,7 +624,7 @@ class TestTranscribeStreamRoute:
         assert resp.status_code == 200
         raw = resp.get_data(as_text=True)
         # The stream should still produce a done event (from the finally block)
-        events = [line[len("data: "):] for line in raw.split("\n") if line.startswith("data: ")]
+        events = [line[len("data: ") :] for line in raw.split("\n") if line.startswith("data: ")]
         last = json.loads(events[-1])
         assert last["done"] is True
         assert last["full_text"] == ""
@@ -654,11 +668,13 @@ class TestRewriteRoute:
         server_mod.llm_manager.rewrite = MagicMock(return_value="Custom rewrite")
         resp = client.post(
             "/rewrite",
-            data=json.dumps({
-                "text": "hello",
-                "tones": ["my_tone"],
-                "custom_tones": {"my_tone": "Be very casual"},
-            }),
+            data=json.dumps(
+                {
+                    "text": "hello",
+                    "tones": ["my_tone"],
+                    "custom_tones": {"my_tone": "Be very casual"},
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 200
@@ -666,9 +682,7 @@ class TestRewriteRoute:
         assert any(v["tone"] == "my_tone" for v in variants)
 
     def test_rewrite_exception(self, client):
-        server_mod.llm_manager.rewrite = MagicMock(
-            side_effect=RuntimeError("LLM failed")
-        )
+        server_mod.llm_manager.rewrite = MagicMock(side_effect=RuntimeError("LLM failed"))
         resp = client.post(
             "/rewrite",
             data=json.dumps({"text": "hello"}),
@@ -694,8 +708,13 @@ class TestLLMModelsRoute:
 
 class TestSetLLMModelRoute:
     def test_missing_body(self, client):
-        resp = client.put("/llm/model", content_type="application/json")
+        resp = client.put(
+            "/llm/model",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
         assert resp.status_code == 400
+        assert "model" in resp.get_json()["error"]
 
     def test_not_found(self, client):
         server_mod.llm_manager.list_models = MagicMock(return_value=["llama-3"])
@@ -719,9 +738,7 @@ class TestSetLLMModelRoute:
 
     def test_load_exception(self, client):
         server_mod.llm_manager.list_models = MagicMock(return_value=["llama-3"])
-        server_mod.llm_manager.load_model = MagicMock(
-            side_effect=RuntimeError("load failed")
-        )
+        server_mod.llm_manager.load_model = MagicMock(side_effect=RuntimeError("load failed"))
         resp = client.put(
             "/llm/model",
             data=json.dumps({"model": "llama-3"}),
@@ -779,9 +796,7 @@ class TestPunctuateRoute:
         assert resp.get_json()["text"] == "Hello, world."
 
     def test_exception(self, client):
-        server_mod.llm_manager.punctuate = MagicMock(
-            side_effect=RuntimeError("inference crash")
-        )
+        server_mod.llm_manager.punctuate = MagicMock(side_effect=RuntimeError("inference crash"))
         resp = client.post(
             "/punctuate",
             data=json.dumps({"text": "hello world"}),
@@ -832,9 +847,7 @@ class TestTranslateRoute:
         assert data["target_language"] == "Spanish"
 
     def test_exception(self, client):
-        server_mod.llm_manager.translate = MagicMock(
-            side_effect=RuntimeError("translation error")
-        )
+        server_mod.llm_manager.translate = MagicMock(side_effect=RuntimeError("translation error"))
         resp = client.post(
             "/translate",
             data=json.dumps({"text": "hello", "target_language": "Spanish"}),
@@ -886,9 +899,7 @@ class TestTranscribeTimestampsRoute:
         server_mod.model_manager.load_model.assert_called_with("whisper-large")
 
     def test_exception(self, client, wav_bytes):
-        server_mod.model_manager.load_model = MagicMock(
-            side_effect=RuntimeError("crash")
-        )
+        server_mod.model_manager.load_model = MagicMock(side_effect=RuntimeError("crash"))
         resp = client.post("/transcribe/timestamps", data=wav_bytes)
         assert resp.status_code == 500
         assert "crash" in resp.get_json()["error"]
@@ -896,8 +907,7 @@ class TestTranscribeTimestampsRoute:
 
 class TestHistoryExportRoute:
     def test_no_db(self, client):
-        with patch("os.path.exists", return_value=False), \
-             patch("os.path.expanduser", return_value="/tmp/no-such-db"):
+        with patch("os.path.exists", return_value=False), patch("os.path.expanduser", return_value="/tmp/no-such-db"):
             resp = client.get("/history/export")
         assert resp.status_code == 404
 
@@ -908,8 +918,7 @@ class TestHistoryExportRoute:
             conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("hello", 1700000000.0))
             conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("world", 1700000010.0))
 
-        with patch("os.path.exists", return_value=True), \
-             patch("os.path.expanduser", return_value=db_path):
+        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
             resp = client.get("/history/export?format=json")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -925,8 +934,7 @@ class TestHistoryExportRoute:
             conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
             conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("test entry", 1700000000.0))
 
-        with patch("os.path.exists", return_value=True), \
-             patch("os.path.expanduser", return_value=db_path):
+        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
             resp = client.get("/history/export?format=markdown")
         assert resp.status_code == 200
         assert "text/markdown" in resp.content_type
@@ -940,8 +948,7 @@ class TestHistoryExportRoute:
             conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
             conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("subtitle line", 1700000000.0))
 
-        with patch("os.path.exists", return_value=True), \
-             patch("os.path.expanduser", return_value=db_path):
+        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
             resp = client.get("/history/export?format=srt")
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
@@ -954,8 +961,7 @@ class TestHistoryExportRoute:
         with sqlite3.connect(db_path) as conn:
             conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
 
-        with patch("os.path.exists", return_value=True), \
-             patch("os.path.expanduser", return_value=db_path):
+        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
             resp = client.get("/history/export?format=xml")
         assert resp.status_code == 400
         assert "Unknown format" in resp.get_json()["error"]
@@ -967,8 +973,7 @@ class TestHistoryExportRoute:
             for i in range(10):
                 conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", (f"entry {i}", 1700000000.0 + i))
 
-        with patch("os.path.exists", return_value=True), \
-             patch("os.path.expanduser", return_value=db_path):
+        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
             resp = client.get("/history/export?format=json&limit=3")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -978,6 +983,7 @@ class TestHistoryExportRoute:
 # ===================================================================
 #  Edge cases and integration-style tests
 # ===================================================================
+
 
 class TestTranscribeNoAudioField:
     """Verify that posting with no body triggers the 400 path."""
@@ -1002,11 +1008,13 @@ class TestRewriteToneResolution:
         server_mod.llm_manager.rewrite = capture_rewrite
         resp = client.post(
             "/rewrite",
-            data=json.dumps({
-                "text": "hello",
-                "tones": ["diplomatic"],
-                "custom_tones": {"diplomatic": "My custom prompt"},
-            }),
+            data=json.dumps(
+                {
+                    "text": "hello",
+                    "tones": ["diplomatic"],
+                    "custom_tones": {"diplomatic": "My custom prompt"},
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 200
@@ -1017,10 +1025,12 @@ class TestRewriteToneResolution:
         server_mod.llm_manager.rewrite = MagicMock(return_value="done")
         resp = client.post(
             "/rewrite",
-            data=json.dumps({
-                "text": "hello",
-                "tones": ["nonexistent_tone"],
-            }),
+            data=json.dumps(
+                {
+                    "text": "hello",
+                    "tones": ["nonexistent_tone"],
+                }
+            ),
             content_type="application/json",
         )
         assert resp.status_code == 200
@@ -1034,9 +1044,7 @@ class TestStreamException:
     """Verify that exceptions in the streaming route return 500."""
 
     def test_stream_load_model_failure(self, client, wav_bytes):
-        server_mod.model_manager.load_model = MagicMock(
-            side_effect=RuntimeError("NPU unavailable")
-        )
+        server_mod.model_manager.load_model = MagicMock(side_effect=RuntimeError("NPU unavailable"))
         resp = client.post("/transcribe/stream", data=wav_bytes)
         assert resp.status_code == 500
         assert "NPU unavailable" in resp.get_json()["error"]
@@ -1049,3 +1057,218 @@ class TestTranscribeTimestampsNoAudio:
         resp = client.post("/transcribe/timestamps", data=b"")
         assert resp.status_code == 400
         assert "No audio" in resp.get_json()["error"]
+
+
+def _fw_segment(text, start=0.0, end=1.0):
+    seg = MagicMock()
+    seg.text = text
+    seg.start = start
+    seg.end = end
+    return seg
+
+
+class TestDetectEngineAndDevice:
+    """Device selection must be deterministic without an NPU or GPU."""
+
+    def test_explicit_cuda(self, monkeypatch):
+        monkeypatch.setenv("WHISPER_DEVICE", "CUDA:1")
+        assert server_mod._detect_engine_and_device() == ("faster-whisper", "cuda:1")
+
+    def test_explicit_openvino_devices(self, monkeypatch):
+        for raw, device in (("gpu", "GPU"), ("CPU", "CPU"), ("npu", "NPU")):
+            monkeypatch.setenv("WHISPER_DEVICE", raw)
+            assert server_mod._detect_engine_and_device() == ("openvino", device)
+
+    def test_unknown_device_falls_back(self, monkeypatch):
+        monkeypatch.setenv("WHISPER_DEVICE", "tpu")
+        with patch.dict(sys.modules, {"openvino": None, "ctranslate2": None}):
+            engine, device = server_mod._detect_engine_and_device()
+        assert (engine, device) == ("faster-whisper", "cpu")
+
+    def test_auto_prefers_npu(self, monkeypatch):
+        monkeypatch.setenv("WHISPER_DEVICE", "auto")
+        ov = MagicMock()
+        ov.Core.return_value.available_devices = ["CPU", "GPU", "NPU"]
+        with patch.dict(sys.modules, {"openvino": ov}):
+            assert server_mod._detect_engine_and_device() == ("openvino", "NPU")
+
+    def test_auto_cuda_when_no_npu(self, monkeypatch):
+        monkeypatch.setenv("WHISPER_DEVICE", "auto")
+        ov = MagicMock()
+        ov.Core.return_value.available_devices = ["CPU"]
+        ct2 = MagicMock()
+        ct2.get_cuda_device_count.return_value = 1
+        with patch.dict(sys.modules, {"openvino": ov, "ctranslate2": ct2}):
+            assert server_mod._detect_engine_and_device() == ("faster-whisper", "cuda")
+
+    def test_auto_discrete_gpu(self, monkeypatch):
+        monkeypatch.setenv("WHISPER_DEVICE", "auto")
+        ov = MagicMock()
+        ov.Core.return_value.available_devices = ["CPU", "GPU", "GPU.1"]
+        ct2 = MagicMock()
+        ct2.get_cuda_device_count.return_value = 0
+        with patch.dict(sys.modules, {"openvino": ov, "ctranslate2": ct2}):
+            assert server_mod._detect_engine_and_device() == ("openvino", "GPU.1")
+
+    def test_auto_integrated_gpu(self, monkeypatch):
+        monkeypatch.setenv("WHISPER_DEVICE", "auto")
+        ov = MagicMock()
+        ov.Core.return_value.available_devices = ["CPU", "GPU"]
+        ct2 = MagicMock()
+        ct2.get_cuda_device_count.return_value = 0
+        with patch.dict(sys.modules, {"openvino": ov, "ctranslate2": ct2}):
+            assert server_mod._detect_engine_and_device() == ("openvino", "GPU")
+
+    def test_auto_openvino_cpu(self, monkeypatch):
+        monkeypatch.setenv("WHISPER_DEVICE", "auto")
+        ov = MagicMock()
+        ov.Core.return_value.available_devices = ["CPU"]
+        ct2 = MagicMock()
+        ct2.get_cuda_device_count.return_value = 0
+        with patch.dict(sys.modules, {"openvino": ov, "ctranslate2": ct2}):
+            assert server_mod._detect_engine_and_device() == ("openvino", "CPU")
+
+    def test_auto_cpu_faster_whisper_when_nothing_installed(self, monkeypatch):
+        monkeypatch.setenv("WHISPER_DEVICE", "auto")
+        with patch.dict(sys.modules, {"openvino": None, "ctranslate2": None}):
+            assert server_mod._detect_engine_and_device() == ("faster-whisper", "cpu")
+
+
+class TestFasterWhisperEngine:
+    """faster-whisper path, mocked so CI does not need CUDA or a model download."""
+
+    def _use_faster_whisper(self, device="cpu"):
+        server_mod.ENGINE = "faster-whisper"
+        server_mod.DEVICE = device
+        whisper = MagicMock(name="WhisperModel")
+        server_mod._faster_whisper_cls = whisper
+        return whisper
+
+    def test_load_local_cpu_model(self, model_mgr):
+        whisper = self._use_faster_whisper("cpu")
+        local = os.path.join(model_mgr.ct2_models_dir, "tiny.en")
+        os.makedirs(local)
+        pipe = model_mgr.load_model("tiny.en")
+        assert pipe is whisper.return_value
+        whisper.assert_called_once_with(
+            local,
+            device="cpu",
+            device_index=0,
+            compute_type="int8",
+            num_workers=1,
+            cpu_threads=1,
+        )
+
+    def test_load_remote_name_when_not_cached(self, model_mgr):
+        whisper = self._use_faster_whisper("cpu")
+        model_mgr.load_model("tiny.en")
+        assert whisper.call_args.args[0] == "tiny.en"
+
+    def test_load_cuda_picks_supported_compute_type(self, model_mgr):
+        whisper = self._use_faster_whisper("cuda:1")
+        ct2 = MagicMock()
+        ct2.get_supported_compute_types.return_value = ["int8", "float32", "int8_float16"]
+        with patch.dict(sys.modules, {"ctranslate2": ct2}):
+            model_mgr.load_model("tiny.en")
+        kwargs = whisper.call_args.kwargs
+        assert kwargs["device"] == "cuda"
+        assert kwargs["device_index"] == 1
+        assert kwargs["compute_type"] == "int8_float16"
+
+    def test_load_cuda_falls_back_when_probe_fails(self, model_mgr):
+        whisper = self._use_faster_whisper("cuda")
+        ct2 = MagicMock()
+        ct2.get_supported_compute_types.side_effect = RuntimeError("no cuda")
+        with patch.dict(sys.modules, {"ctranslate2": ct2}):
+            model_mgr.load_model("tiny.en")
+        assert whisper.call_args.kwargs["compute_type"] == "float32"
+
+    def test_load_cuda_falls_back_when_no_preferred_type(self, model_mgr):
+        whisper = self._use_faster_whisper("cuda")
+        ct2 = MagicMock()
+        ct2.get_supported_compute_types.return_value = ["bfloat16"]
+        with patch.dict(sys.modules, {"ctranslate2": ct2}):
+            model_mgr.load_model("tiny.en")
+        assert whisper.call_args.kwargs["compute_type"] == "float32"
+
+    def test_transcribe(self, model_mgr):
+        self._use_faster_whisper()
+        pipe = MagicMock()
+        info = MagicMock(language="en", language_probability=0.9123)
+        pipe.transcribe.return_value = ([_fw_segment("hello"), _fw_segment(" world")], info)
+        model_mgr.pipelines["tiny.en"] = pipe
+        text, perf, _elapsed = model_mgr.transcribe("tiny.en", np.zeros(16), language="en")
+        assert text == "hello world"
+        assert perf == {"language": "en", "language_probability": 0.912}
+        assert pipe.transcribe.call_args.kwargs["language"] == "en"
+        assert pipe.transcribe.call_args.kwargs["beam_size"] == 5
+
+    def test_transcribe_stream(self, model_mgr):
+        self._use_faster_whisper()
+        pipe = MagicMock()
+        pipe.transcribe.return_value = ([_fw_segment("a"), _fw_segment("b")], MagicMock())
+        model_mgr.pipelines["tiny.en"] = pipe
+        chunks = list(model_mgr.transcribe_stream("tiny.en", np.zeros(16)))
+        assert chunks == ["a", "b"]
+        assert pipe.transcribe.call_args.kwargs["language"] is None
+
+    def test_transcribe_timestamps(self, model_mgr):
+        self._use_faster_whisper()
+        pipe = MagicMock()
+        pipe.transcribe.return_value = (
+            [_fw_segment("hello", 0.0, 0.25), _fw_segment(" world", 0.25, 0.8)],
+            MagicMock(),
+        )
+        model_mgr.pipelines["tiny.en"] = pipe
+        text, chunks, perf = model_mgr.transcribe_timestamps("tiny.en", np.zeros(16), language="de")
+        assert text == "hello world"
+        assert chunks == [
+            {"text": "hello", "start": 0.0, "end": 0.25},
+            {"text": " world", "start": 0.25, "end": 0.8},
+        ]
+        assert perf == {}
+        assert pipe.transcribe.call_args.kwargs["word_timestamps"] is False
+        assert pipe.transcribe.call_args.kwargs["language"] == "de"
+
+    def test_list_models_inserts_default_and_hides_dotfiles(self, model_mgr):
+        server_mod.ENGINE = "faster-whisper"
+        os.makedirs(os.path.join(model_mgr.ct2_models_dir, "tiny.en"))
+        os.makedirs(os.path.join(model_mgr.ct2_models_dir, ".cache"))
+        models = model_mgr.list_models()
+        assert models[0] == server_mod.CT2_MODEL_NAME
+        assert "tiny.en" in models
+        assert all(not name.startswith(".") for name in models)
+
+    def test_list_models_does_not_duplicate_default(self, model_mgr):
+        server_mod.ENGINE = "faster-whisper"
+        os.makedirs(os.path.join(model_mgr.ct2_models_dir, server_mod.CT2_MODEL_NAME))
+        models = model_mgr.list_models()
+        assert models.count(server_mod.CT2_MODEL_NAME) == 1
+
+    def test_list_models_missing_dir_still_offers_default(self, model_mgr):
+        server_mod.ENGINE = "faster-whisper"
+        model_mgr.ct2_models_dir = os.path.join(model_mgr.ct2_models_dir, "missing")
+        assert model_mgr.list_models() == [server_mod.CT2_MODEL_NAME]
+
+
+class TestOpenVinoBranches:
+    def test_list_models_missing_directory(self, model_mgr):
+        model_mgr.models_dir = os.path.join(model_mgr.models_dir, "missing")
+        assert model_mgr.list_models() == []
+
+    def test_timestamps_passes_language(self, model_mgr):
+        pipe = MagicMock()
+        result = _make_mock_result("bonjour")
+        result.chunks = []
+        pipe.generate.return_value = result
+        model_mgr.pipelines["m"] = pipe
+        text, chunks, _perf = model_mgr.transcribe_timestamps("m", np.zeros(8), language="fr")
+        assert text == "bonjour"
+        assert chunks == []
+        assert pipe.generate.call_args.kwargs["language"] == "<|fr|>"
+        assert pipe.generate.call_args.kwargs["return_timestamps"] is True
+
+    def test_llm_requires_openvino_genai(self, llm_mgr):
+        server_mod._openvino_genai_for_llm = None
+        with pytest.raises(RuntimeError, match="OpenVINO GenAI"):
+            llm_mgr.load_model("llama-3")
