@@ -20,14 +20,14 @@ That's it. `make install` downloads the default model (`whisper-small.en-fp16-ov
 ### Transcribe an audio file
 
 ```bash
-curl -X POST http://127.0.0.1:5000/transcribe --data-binary @recording.wav
+curl -X POST http://127.0.0.2:5000/transcribe --data-binary @recording.wav
 # {"text": "This is the transcribed text."}
 ```
 
 ### Stream transcription (real-time token-by-token via SSE)
 
 ```bash
-curl -N -X POST http://127.0.0.1:5000/transcribe/stream --data-binary @recording.wav
+curl -N -X POST http://127.0.0.2:5000/transcribe/stream --data-binary @recording.wav
 # data: {"text": "This is "}
 # data: {"text": "the transcribed "}
 # data: {"text": "text."}
@@ -37,10 +37,10 @@ curl -N -X POST http://127.0.0.1:5000/transcribe/stream --data-binary @recording
 ### Use a specific model
 
 ```bash
-curl http://127.0.0.1:5000/models
+curl http://127.0.0.2:5000/models
 # {"models": ["whisper-small.en-fp16-ov", "whisper-base.en"]}
 
-curl -X POST http://127.0.0.1:5000/transcribe/whisper-base.en --data-binary @recording.wav
+curl -X POST http://127.0.0.2:5000/transcribe/whisper-base.en --data-binary @recording.wav
 ```
 
 ### Voice dictation (push-to-talk)
@@ -326,7 +326,7 @@ Available models: `whisper-tiny`, `whisper-base`, `whisper-small`, `whisper-medi
 ### Batch Transcription
 
 ```bash
-curl -X POST http://127.0.0.1:5000/transcribe \
+curl -X POST http://127.0.0.2:5000/transcribe \
     --data-binary @audio.wav
 ```
 
@@ -337,7 +337,7 @@ curl -X POST http://127.0.0.1:5000/transcribe \
 ### Streaming Transcription (SSE)
 
 ```bash
-curl -N -X POST http://127.0.0.1:5000/transcribe/stream \
+curl -N -X POST http://127.0.0.2:5000/transcribe/stream \
     --data-binary @audio.wav
 ```
 
@@ -351,7 +351,7 @@ data: {"done": true, "full_text": "The transcribed text appears here."}
 ### List Models
 
 ```bash
-curl http://127.0.0.1:5000/models
+curl http://127.0.0.2:5000/models
 ```
 
 ```json
