@@ -182,17 +182,12 @@ class ModelManager:
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"Model {model_name} not found at {model_path}")
             logger.info(f"Loading {model_name} on {DEVICE} (OpenVINO)")
-            # 2025.4 defaults NPU to the static pipeline, which rejects
-            # initial_prompt. 2026.4 defaults to stateful. Force stateful so
-            # an older default cannot trip that check. The prompt slot is
-            # still 4 tokens: MAX_PROMPT_LEN would raise it, but the stateful
-            # pipeline forwards that key to the encoder and the NPU plugin
-            # rejects it. configure_backend skips the bias instead.
-            pipe_kwargs = {}
-            if str(DEVICE).upper().startswith("NPU"):
-                pipe_kwargs["STATIC_PIPELINE"] = False
-            self.pipelines[model_name] = _openvino_genai.WhisperPipeline(
-                str(model_path), device=DEVICE, **pipe_kwargs
+            # Stateful on NPU so GenAI 2025.4 does not stay on the static
+            # pipeline. A binding that rejects STATIC_PIPELINE falls back.
+            # Decoder bias is tried later and dropped, with a log, if this
+            # build rejects it or the 4 token slot is too small.
+            self.pipelines[model_name] = vocab.load_whisper_pipeline(
+                _openvino_genai.WhisperPipeline, model_path, DEVICE
             )
         else:
             assert _faster_whisper_cls is not None
@@ -403,7 +398,13 @@ def _extract_perf_metrics(result):
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "model": model_manager.default_model, "engine": ENGINE, "device": DEVICE})
+    return jsonify({
+        "status": "ok",
+        "model": model_manager.default_model,
+        "engine": ENGINE,
+        "device": DEVICE,
+        "bias": vocab.bias_status(),
+    })
 
 
 @app.route("/models", methods=["GET"])
@@ -652,10 +653,11 @@ llm_manager = LLMManager()
 if __name__ == "__main__":
     _vocab_info = vocab.describe()
     logger.info(
-        "Vocabulary: %d terms, %d replacements, prompt %d chars (%s)",
+        "Vocabulary: %d terms, %d replacements, prompt %d chars, bias %s (%s)",
         _vocab_info["terms"],
         _vocab_info["replacements"],
         _vocab_info["initial_prompt_chars"],
+        _vocab_info["bias_mode"],
         _vocab_info["path"],
     )
     model_manager.load_model(model_manager.default_model)

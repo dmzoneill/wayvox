@@ -1,6 +1,7 @@
 # GenAI 2026.4 runs NPU Whisper on the stateful pipeline by default.
-# That path accepts initial_prompt and hotwords. The 2025.4 static
-# pipeline rejects both before inference.
+# That path accepts initial_prompt and hotwords. The server still runs
+# on older GenAI: a missing STATIC_PIPELINE option or a rejected prompt
+# fails over to regex replacements and logs the upgrade step.
 openvino>=2026.4.1
 openvino-tokenizers>=2026.4.1
 openvino-genai>=2026.4.1

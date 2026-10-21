@@ -1,9 +1,12 @@
 """Technical vocabulary for Whisper dictation.
 
-Terms bias the decoder through initial_prompt and hotwords on devices
-that accept them. OpenVINO NPU compiles a 4 token prompt slot, which is
-too small for this list, so those arguments are not sent there. Replacement
-rules still fix mishears the model emits, such as "polar quest" -> "pull request".
+Terms bias the decoder through initial_prompt and hotwords when the
+backend accepts them. The first transcription tries both. GenAI 2025.4's
+static NPU pipeline rejects the arguments. GenAI 2026.4 accepts them, then
+fails when the prefill exceeds the 4 token NPU slot. Either failure drops
+the arguments for the rest of the process and logs the upgrade that would
+enable decoder bias. Replacement rules still fix mishears the model emits,
+such as "polar quest" -> "pull request".
 
 The editable file is ~/.config/whisper-npu/vocabulary.json. make install
 copies share/vocabulary.json there when that file is missing, and leaves an
@@ -223,6 +226,10 @@ _lock = threading.Lock()
 _state = {"key": None, "data": None, "rules": None, "errors": ()}
 _logged_errors = set()
 _rejected_bias = set()
+_failover_logged = set()
+_backend_device = ""
+_pipeline_mode = ""
+_bias_confirmed = False
 
 
 def default_path():
@@ -519,56 +526,190 @@ _BIAS_KEYS = ("hotwords", "initial_prompt")
 
 
 def configure_backend(device):
-    """Skip decoder bias on NPU.
+    """Remember the Whisper device. Bias stays enabled until a generate fails.
 
-    GenAI 2026.4 runs NPU Whisper on the stateful pipeline, so it no longer
-    rejects initial_prompt up front. The compiled prompt slot is still 4
-    tokens. MAX_PROMPT_LEN would raise it, but that key is forwarded to the
-    encoder compile and the NPU plugin rejects the option. A vocabulary does
-    not fit in the 4 tokens, and a longer prefill fails during inference.
-    Regex replacements still run.
+    Skipping NPU bias up front hid builds that can accept initial_prompt.
+    The first transcription tries it. A rejection fails over to regex and
+    logs the upgrade that enables decoder bias.
     """
-    if not str(device or "").upper().startswith("NPU"):
+    global _backend_device
+    _backend_device = str(device or "")
+    if not _backend_device.upper().startswith("NPU"):
         return
-    fresh = [key for key in _BIAS_KEYS if key not in _rejected_bias]
-    _rejected_bias.update(_BIAS_KEYS)
-    if fresh:
+    log.info(
+        "NPU Whisper will try initial_prompt and hotwords on the first transcription. "
+        "If this OpenVINO build rejects them, or the 4 token prompt slot is too small, "
+        "the server fails over to regex replacements and logs the upgrade step. "
+        "Vocabulary file: %s",
+        default_path(),
+    )
+
+
+def _installed_genai_version():
+    try:
+        import openvino_genai as ovg
+    except ImportError:
+        return "not installed"
+    return getattr(ovg, "__version__", "unknown")
+
+
+def _option_rejected(exc, name):
+    """True when an exception is about one named argument or pipeline option."""
+    text = str(exc)
+    if name not in text:
+        return False
+    lower = text.lower()
+    return isinstance(exc, TypeError) or any(
+        token in lower
+        for token in ("unexpected", "not supported", "unsupported", "unknown")
+    )
+
+
+def load_whisper_pipeline(factory, model_path, device):
+    """Open WhisperPipeline. On NPU, ask for the stateful pipeline first.
+
+    GenAI 2026.4 defaults NPU to stateful. GenAI 2025.4 defaults to static,
+    which rejects initial_prompt, but accepts STATIC_PIPELINE=False.
+    A binding that does not know that option falls back to the default
+    pipeline. Other load errors propagate.
+    """
+    global _pipeline_mode
+    npu = str(device or "").upper().startswith("NPU")
+    kwargs = {"device": device}
+    if npu:
+        kwargs["STATIC_PIPELINE"] = False
+    try:
+        pipe = factory(str(model_path), **kwargs)
+    except Exception as exc:
+        if not (npu and _option_rejected(exc, "STATIC_PIPELINE")):
+            raise
+        _pipeline_mode = "default"
+        _log_pipeline_failover(exc)
+        return factory(str(model_path), device=device)
+    _pipeline_mode = "stateful" if npu else "default"
+    if npu:
         log.info(
-            "NPU Whisper prompt slot is 4 tokens. Skipping %s. Vocabulary replacements still apply.",
-            " and ".join(fresh),
+            "NPU Whisper pipeline is stateful (STATIC_PIPELINE=False). "
+            "OpenVINO GenAI %s. Decoder bias is tried on the first transcription. "
+            "A 4 token prompt slot fails over to regex. The failover log names what to upgrade.",
+            _installed_genai_version(),
         )
+    return pipe
 
 
-def _remember_rejected(key):
-    if key not in _rejected_bias:
-        _rejected_bias.add(key)
-        log.warning("Whisper backend does not accept %s. Continuing without it.", key)
+def _one_line(exc):
+    return " ".join(str(exc).split())
 
 
-def _rejected_keys_in_error(exc, attempt):
-    """Return bias kwargs this exception says the backend refused."""
-    message = str(exc)
-    named = [key for key in _BIAS_KEYS if key in attempt and key in message]
-    lower = message.lower()
-    if named and (isinstance(exc, TypeError) or "not supported" in lower or "unexpected" in lower):
-        return named
+def _log_pipeline_failover(exc):
+    signature = ("pipeline", ("STATIC_PIPELINE",))
+    if signature in _failover_logged:
+        return
+    _failover_logged.add(signature)
+    log.warning(
+        "Failover: WhisperPipeline rejected STATIC_PIPELINE (%s). "
+        "Loaded the default pipeline instead. "
+        "GenAI 2025.4 defaults NPU to a static pipeline that rejects initial_prompt and hotwords. "
+        "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, "
+        "then restart whisper-server. That release uses the stateful pipeline, which accepts decoder bias. "
+        "Regex replacements in %s still apply. Installed openvino-genai is %s.",
+        _one_line(exc),
+        default_path(),
+        _installed_genai_version(),
+    )
+
+
+def _failure_reason(exc, attempt):
+    """Classify a generate error as a bias rejection, or return (None, [])."""
+    text = str(exc)
+    lower = text.lower()
+    present = [key for key in _BIAS_KEYS if key in attempt]
+    if not present:
+        return None, []
+    named = [key for key in present if key in text]
+    unsupported = (
+        isinstance(exc, TypeError)
+        or "not supported" in lower
+        or "unexpected" in lower
+        or "has_value" in lower
+    )
+    if named and unsupported:
+        # The static NPU pipeline rejects every bias argument the same way.
+        # Drop them together so the retry does not spend another inference.
+        if "npu" in lower and "not supported" in lower:
+            return "unsupported", list(present)
+        return "unsupported", named
     if isinstance(exc, TypeError) and "unexpected keyword" in lower:
-        present = [key for key in _BIAS_KEYS if key in attempt]
-        return present[:1]
+        return "unsupported", present[:1]
     # Prefill longer than the compiled NPU prompt slot.
     if "roi_end" in lower:
-        return [key for key in _BIAS_KEYS if key in attempt]
-    return []
+        return "prompt_slot", list(present)
+    return None, []
+
+
+def _log_failover(reason, dropped, exc):
+    signature = (reason, tuple(dropped))
+    if signature in _failover_logged:
+        return
+    _failover_logged.add(signature)
+    keys = " and ".join(dropped)
+    version = _installed_genai_version()
+    path = default_path()
+    npu = "npu" in str(exc).lower() or _backend_device.upper().startswith("NPU")
+    if reason == "prompt_slot":
+        log.warning(
+            "Failover: NPU Whisper prompt slot is 4 tokens, shorter than %s. "
+            "Error: %s. Dropped %s for the rest of this process so the next utterance skips the failed inference. "
+            "Regex replacements in %s still correct misheard terms. "
+            "Action: do not set MAX_PROMPT_LEN. The stateful pipeline forwards that option to the NPU encoder compile and the plugin rejects it. "
+            "Decoder bias needs an OpenVINO release that compiles a longer NPU prompt slot. "
+            "Installed openvino-genai is %s. After upgrading, restart whisper-server. "
+            "Until the slot grows, add a replacement rule for any term the model still mishears.",
+            keys,
+            _one_line(exc),
+            keys,
+            path,
+            version,
+        )
+        return
+    if reason == "unsupported" and npu:
+        log.warning(
+            "Failover: this OpenVINO build rejected %s (%s). "
+            "Transcription continues without decoder bias. "
+            "Regex replacements in %s still correct misheard terms. "
+            "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, then restart whisper-server. "
+            "GenAI 2025.4 uses a static NPU pipeline that rejects initial_prompt and hotwords. "
+            "GenAI 2026.4 accepts those arguments. "
+            "Installed openvino-genai is %s. "
+            "If a later log says the prompt slot is 4 tokens, a full term list still cannot be sent and regex remains the fix.",
+            keys,
+            _one_line(exc),
+            path,
+            version,
+        )
+        return
+    log.warning(
+        "Failover: Whisper backend rejected %s (%s). "
+        "Transcription continues without those arguments. "
+        "Regex replacements in %s still apply. "
+        "Action: none if the other bias argument was accepted. "
+        "CPU, GPU, and faster-whisper accept initial_prompt and hotwords. "
+        "An older binding raises TypeError for an unknown argument.",
+        keys,
+        _one_line(exc),
+        path,
+    )
 
 
 def generate_biased(fn, *args, **kwargs):
     """Call a Whisper generate/transcribe function with prompt and hotwords.
 
     Backends that reject one of those arguments are retried without it.
-    OpenVINO GenAI 2025.4's static NPU pipeline raises a runtime error, not
-    TypeError, for both arguments. GenAI 2026.4 accepts the arguments, then
-    fails inference when the prefill is longer than the 4 token NPU slot.
-    Any other failure is raised as-is.
+    The rejection is remembered so the next utterance does not pay a failed
+    inference. OpenVINO GenAI 2025.4's static NPU pipeline raises a runtime
+    error, not TypeError, for both arguments. GenAI 2026.4 accepts the
+    arguments, then fails inference when the prefill is longer than the
+    4 token NPU slot. Any other failure is raised as-is.
     """
     prompt = bias()
     attempt = dict(kwargs)
@@ -579,22 +720,50 @@ def generate_biased(fn, *args, **kwargs):
         if value:
             attempt[key] = value
 
+    global _bias_confirmed
     while True:
         try:
-            return fn(*args, **attempt)
+            result = fn(*args, **attempt)
         except Exception as exc:
-            dropped = _rejected_keys_in_error(exc, attempt)
+            reason, dropped = _failure_reason(exc, attempt)
             if not dropped:
                 raise
             for key in dropped:
                 attempt.pop(key, None)
-                _remember_rejected(key)
+                _rejected_bias.add(key)
+            _log_failover(reason, dropped, exc)
+            continue
+        if any(key in attempt for key in _BIAS_KEYS):
+            _bias_confirmed = True
+        return result
+
+
+def bias_status():
+    """Runtime bias state for /health and startup logs."""
+    rejected = sorted(_rejected_bias)
+    active = [key for key in _BIAS_KEYS if key not in _rejected_bias]
+    if rejected and not active:
+        mode = "regex"
+    elif rejected:
+        mode = "partial"
+    elif _bias_confirmed or not _backend_device.upper().startswith("NPU"):
+        mode = "on"
+    else:
+        mode = "pending"
+    return {
+        "mode": mode,
+        "active": active,
+        "rejected": rejected,
+        "pipeline": _pipeline_mode or "unloaded",
+        "device": _backend_device,
+    }
 
 
 def describe(path=None):
     path = path or default_path()
     data = load(path)
     prompts = bias(path)
+    status = bias_status()
     return {
         "path": path,
         "enabled": bool(data.get("enabled", True)),
@@ -603,4 +772,6 @@ def describe(path=None):
         "initial_prompt_chars": len(prompts["initial_prompt"]),
         "hotwords_chars": len(prompts["hotwords"]),
         "using_defaults": not os.path.isfile(path),
+        "bias_mode": status["mode"],
+        "bias_rejected": status["rejected"],
     }

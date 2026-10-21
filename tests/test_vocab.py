@@ -1,6 +1,7 @@
 """Tests for technical vocabulary bias and mishear replacements."""
 
 import json
+import logging
 
 import pytest
 
@@ -135,18 +136,118 @@ def test_generate_biased_retries_when_npu_rejects_prompt(vocab_path, monkeypatch
     assert vocab._rejected_bias == {"initial_prompt", "hotwords"}
 
 
-def test_configure_backend_skips_npu_bias(vocab_path, monkeypatch):
+def test_configure_backend_keeps_npu_bias_until_failover(vocab_path, monkeypatch, caplog):
     monkeypatch.setattr(vocab, "_rejected_bias", set())
+    monkeypatch.setattr(vocab, "_failover_logged", set())
+    monkeypatch.setattr(vocab, "_bias_confirmed", False)
     vocab.configure_backend("CPU")
     assert vocab._rejected_bias == set()
-    vocab.configure_backend("NPU")
+    with caplog.at_level(logging.INFO, logger="vocab"):
+        vocab.configure_backend("NPU")
+    assert "first transcription" in caplog.text
+    assert "Failover" not in caplog.text
+    assert vocab.bias_status()["mode"] == "pending"
 
     def backend(*_args, **kwargs):
-        assert "initial_prompt" not in kwargs
-        assert "hotwords" not in kwargs
+        assert "initial_prompt" in kwargs
+        assert "hotwords" in kwargs
         return "ok"
 
     assert vocab.generate_biased(backend, language="<|en|>") == "ok"
+    assert vocab.bias_status()["mode"] == "on"
+
+
+def test_npu_reject_log_names_upgrade(vocab_path, monkeypatch, caplog):
+    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    monkeypatch.setattr(vocab, "_failover_logged", set())
+    vocab.configure_backend("CPU")
+
+    def backend(*_args, **kwargs):
+        if "initial_prompt" in kwargs or "hotwords" in kwargs:
+            raise RuntimeError(
+                "Check failed: 'initial_prompt' parameter is not supported on NPU device."
+            )
+        return "ok"
+
+    with caplog.at_level(logging.WARNING, logger="vocab"):
+        assert vocab.generate_biased(backend, language="<|en|>") == "ok"
+        assert vocab.generate_biased(backend, language="<|en|>") == "ok"
+    warnings = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+    assert len(warnings) == 1
+    assert warnings[0].startswith("Failover:")
+    assert "2026.4.1" in warnings[0]
+    assert "regex" in warnings[0].lower()
+    assert "restart whisper-server" in warnings[0]
+    assert vocab.bias_status()["mode"] == "regex"
+
+
+def test_prompt_slot_log_names_max_prompt_len(vocab_path, monkeypatch, caplog):
+    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    monkeypatch.setattr(vocab, "_failover_logged", set())
+    vocab.configure_backend("NPU")
+
+    def backend(*_args, **kwargs):
+        if "initial_prompt" in kwargs or "hotwords" in kwargs:
+            raise RuntimeError("Check '*roi_end <= *max_dim' failed")
+        return "ok"
+
+    with caplog.at_level(logging.WARNING, logger="vocab"):
+        assert vocab.generate_biased(backend, language="<|en|>") == "ok"
+    text = caplog.text
+    assert "Failover:" in text
+    assert "4 tokens" in text
+    assert "MAX_PROMPT_LEN" in text
+    assert "replacement rule" in text
+    assert vocab.bias_status()["mode"] == "regex"
+
+
+def test_load_whisper_pipeline_falls_back_when_static_flag_rejected(monkeypatch, caplog):
+    monkeypatch.setattr(vocab, "_failover_logged", set())
+    calls = []
+
+    def factory(path, **kwargs):
+        calls.append(kwargs)
+        if "STATIC_PIPELINE" in kwargs:
+            raise TypeError("unexpected keyword argument 'STATIC_PIPELINE'")
+        return "pipe"
+
+    with caplog.at_level(logging.WARNING, logger="vocab"):
+        assert vocab.load_whisper_pipeline(factory, "/m", "NPU") == "pipe"
+    assert calls == [
+        {"device": "NPU", "STATIC_PIPELINE": False},
+        {"device": "NPU"},
+    ]
+    assert "Failover:" in caplog.text
+    assert "2026.4.1" in caplog.text
+    assert vocab.bias_status()["pipeline"] == "default"
+
+
+def test_load_whisper_pipeline_keeps_stateful_on_npu(monkeypatch):
+    monkeypatch.setattr(vocab, "_failover_logged", set())
+
+    def factory(path, **kwargs):
+        assert kwargs["STATIC_PIPELINE"] is False
+        return "pipe"
+
+    assert vocab.load_whisper_pipeline(factory, "/m", "NPU") == "pipe"
+    assert vocab.bias_status()["pipeline"] == "stateful"
+
+
+def test_load_whisper_pipeline_cpu_skips_static_flag():
+    def factory(path, **kwargs):
+        assert "STATIC_PIPELINE" not in kwargs
+        return "pipe"
+
+    assert vocab.load_whisper_pipeline(factory, "/m", "CPU") == "pipe"
+    assert vocab.bias_status()["pipeline"] == "default"
+
+
+def test_load_whisper_pipeline_reraises_unrelated():
+    def factory(path, **kwargs):
+        raise RuntimeError("npu missing")
+
+    with pytest.raises(RuntimeError, match="npu missing"):
+        vocab.load_whisper_pipeline(factory, "/m", "NPU")
 
 
 def test_generate_biased_retries_when_npu_prompt_slot_is_short(vocab_path, monkeypatch):

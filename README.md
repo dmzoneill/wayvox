@@ -240,8 +240,8 @@ python3 push-to-talk.py --key KEY_RIGHTCTRL --backend openvino --stream-interval
 
 Whisper often hears computer terms as everyday words (`polar quest` instead of `pull request`). Two fixes run on every transcription:
 
-1. **Bias.** A term list is sent as the Whisper `initial_prompt` and, when the backend accepts it, as `hotwords`. OpenVINO on NPU rejects both arguments. CPU, GPU, and faster-whisper still receive them.
-2. **Replacements.** Python regular expressions rewrite leftovers the model still gets wrong. These run on every device, including NPU.
+1. **Bias.** A term list is sent as the Whisper `initial_prompt` and as `hotwords`. CPU, GPU, and faster-whisper accept both. On NPU the first transcription tries them. GenAI 2025.4's static pipeline rejects the arguments. GenAI 2026.4 accepts them, then fails when the prefill exceeds the 4 token prompt slot. Either failure drops the arguments for the rest of the process. The journal line starts with `Failover:` and names the upgrade that enables decoder bias. `GET /health` reports `bias.mode` as `pending`, `on`, `partial`, or `regex`.
+2. **Replacements.** Python regular expressions rewrite leftovers the model still gets wrong. These run on every device, including after a bias failover.
 
 Built-in lists cover git, GitHub, Kubernetes, containers, databases, web APIs, languages, and Linux commands. `make install` copies `share/vocabulary.json` to `~/.config/whisper-npu/vocabulary.json` when that file is absent. A later install leaves an existing file alone. Edit it from the tray: **Edit Vocabulary...** in the GNOME menu, the GNOME preferences window, or the KDE popup. That opens `vocab-editor.py`. The server reloads the file on the next transcription. No restart.
 
@@ -391,7 +391,7 @@ curl http://127.0.0.2:5000/models
 | aiohttp | >= 3.9.0 | push-to-talk.py |
 | evdev | >= 1.9.0 | push-to-talk.py |
 
-OpenVINO GenAI 2026.4 or newer is required for NPU dictation. That release defaults Whisper to the stateful pipeline. GenAI 2025.4 compiles a static pipeline that rejects `initial_prompt` and `hotwords` before inference. The NPU prompt slot is still 4 tokens, and `MAX_PROMPT_LEN` cannot raise it: the stateful pipeline forwards that option to the encoder compile, which the NPU plugin rejects. Vocabulary terms are applied by the regex replacements instead.
+OpenVINO GenAI 2026.4.1 is what `make install` pulls. Older GenAI still dictates: the server asks NPU for `STATIC_PIPELINE=False`, and if that option is missing it loads the default pipeline and logs the upgrade command. GenAI 2025.4's static pipeline rejects `initial_prompt` and `hotwords`. The server retries without them and logs that too. GenAI 2026.4 accepts the arguments, but the NPU prompt slot is still 4 tokens. `MAX_PROMPT_LEN` cannot raise it, because the stateful pipeline forwards that option to the encoder compile and the NPU plugin rejects it. That overflow also fails over to the regex replacements. Restart `whisper-server` after upgrading so the next process can try decoder bias again.
 
 ### System
 
