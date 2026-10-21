@@ -227,6 +227,7 @@ _state = {"key": None, "data": None, "rules": None, "errors": ()}
 _logged_errors = set()
 _rejected_bias = set()
 _failover_logged = set()
+_failover_reasons = []
 _backend_device = ""
 _pipeline_mode = ""
 _bias_confirmed = False
@@ -602,6 +603,8 @@ def _one_line(exc):
 
 
 def _log_pipeline_failover(exc):
+    if "static_pipeline" not in _failover_reasons:
+        _failover_reasons.append("static_pipeline")
     signature = ("pipeline", ("STATIC_PIPELINE",))
     if signature in _failover_logged:
         return
@@ -648,6 +651,8 @@ def _failure_reason(exc, attempt):
 
 
 def _log_failover(reason, dropped, exc):
+    if reason and reason not in _failover_reasons:
+        _failover_reasons.append(reason)
     signature = (reason, tuple(dropped))
     if signature in _failover_logged:
         return
@@ -756,6 +761,7 @@ def bias_status():
         "rejected": rejected,
         "pipeline": _pipeline_mode or "unloaded",
         "device": _backend_device,
+        "failover": list(_failover_reasons),
     }
 
 

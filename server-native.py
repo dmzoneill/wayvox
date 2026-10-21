@@ -10,6 +10,7 @@ import threading
 
 SERVER_START_TIME = time.time()
 
+import diagnostics
 import vocab
 
 app = Flask(__name__)
@@ -396,6 +397,34 @@ def _extract_perf_metrics(result):
         return {}
 
 
+def _runtime_interface():
+    if ENGINE == "openvino":
+        return f"OpenVINO GenAI WhisperPipeline, device plugin {DEVICE}"
+    if ENGINE == "faster-whisper":
+        return f"faster-whisper through CTranslate2, device {DEVICE}"
+    return ENGINE
+
+
+def system_report():
+    """Facts for the tray About dialog. Versions match this server process."""
+    report = diagnostics.collect()
+    report["source"] = "whisper-server"
+    report["runtime"] = {
+        "engine": ENGINE,
+        "device": DEVICE,
+        "requested_device": os.environ.get("WHISPER_DEVICE", "auto"),
+        "model": model_manager.default_model,
+        "llm_model": LLM_MODEL,
+        "llm_device": LLM_DEVICE,
+        "interface": _runtime_interface(),
+        "pid": os.getpid(),
+        "bias": vocab.bias_status(),
+        "vocab": vocab.describe(),
+    }
+    report["text"] = diagnostics.format_report(report)
+    return report
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({
@@ -405,6 +434,11 @@ def health():
         "device": DEVICE,
         "bias": vocab.bias_status(),
     })
+
+
+@app.route("/system", methods=["GET"])
+def system_info():
+    return jsonify(system_report())
 
 
 @app.route("/models", methods=["GET"])

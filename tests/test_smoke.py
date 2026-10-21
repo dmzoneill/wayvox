@@ -93,7 +93,7 @@ class TestServerSmoke:
     def test_all_expected_routes_registered(self):
         rules = [r.rule for r in self.mod.app.url_map.iter_rules()]
         expected = [
-            "/health", "/models", "/model/default",
+            "/health", "/system", "/models", "/model/default",
             "/transcribe", "/transcribe/<model_name>",
             "/transcribe/stream", "/transcribe/stream/<model_name>",
             "/rewrite", "/llm/models", "/llm/model", "/llm/tones",

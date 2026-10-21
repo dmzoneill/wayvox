@@ -4,7 +4,7 @@ import Gio from 'gi://Gio'
 
 import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js'
 
-import { openVocabEditor } from './utils.js'
+import { openAbout, openVocabEditor } from './utils.js'
 
 export default class WhisperNpuPreferences extends ExtensionPreferences {
   fillPreferencesWindow (window) {
@@ -15,6 +15,7 @@ export default class WhisperNpuPreferences extends ExtensionPreferences {
     page.add(this._buildServerGroup(settings))
     page.add(this._buildOptionsGroup(settings))
     page.add(this._buildVocabularyGroup())
+    page.add(this._buildAboutGroup(settings))
 
     window.add(page)
   }
@@ -153,6 +154,26 @@ export default class WhisperNpuPreferences extends ExtensionPreferences {
     button.connect('clicked', () => {
       if (!openVocabEditor(this.path))
         row.set_subtitle('Editor not found. Expected vocab-editor.py in the whisper-npu-server checkout.')
+    })
+    group.add(row)
+    return group
+  }
+
+  _buildAboutGroup (settings) {
+    const group = new Adw.PreferencesGroup({
+      title: 'About',
+      description: 'NPU, GPUs, the inference library, and versions from the running server.'
+    })
+    const button = new Gtk.Button({
+      label: 'About...',
+      valign: Gtk.Align.CENTER
+    })
+    const row = new Adw.ActionRow({ title: 'System information' })
+    row.add_suffix(button)
+    row.activatable = false
+    button.connect('clicked', () => {
+      if (!openAbout(this.path, settings.get_string('server-host'), settings.get_int('server-port')))
+        row.set_subtitle('About dialog not found. Expected about.py in the whisper-npu-server checkout.')
     })
     group.add(row)
     return group

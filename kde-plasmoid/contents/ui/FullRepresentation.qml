@@ -561,6 +561,20 @@ PlasmaExtras.Representation {
                     wrapMode: Text.WordWrap
                 }
 
+                PlasmaComponents.Button {
+                    Layout.fillWidth: true
+                    text: "About..."
+                    icon.name: "help-about"
+                    onClicked: {
+                        var home = root.homeDir
+                        var host = String(serverHost || "127.0.0.1").replace(/[^A-Za-z0-9._:-]/g, "")
+                        var port = parseInt(serverPort, 10) || 5000
+                        var cmd = "python3 \"" + home + "/src/usr/whisper-npu-server/about.py\" --host " + host + " --port " + port
+                        cmd += " || python3 \"" + home + "/src/whisper-npu-server/about.py\" --host " + host + " --port " + port
+                        root.executable.exec(cmd)
+                    }
+                }
+
                 Kirigami.Separator { Layout.fillWidth: true }
 
                 // ----- Export History -----

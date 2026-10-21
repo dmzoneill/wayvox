@@ -410,6 +410,38 @@ class TestHealthRoute:
         assert data["status"] == "ok"
         assert "model" in data
 
+    def test_system_report(self, client, monkeypatch):
+        monkeypatch.setattr(
+            server_mod.diagnostics,
+            "collect",
+            lambda: {
+                "app": {"version": "0.0.2"},
+                "python": "3.14.0",
+                "python_executable": "/venv/bin/python",
+                "platform": "Linux",
+                "cpu": "test-cpu",
+                "libraries": {"openvino": "2026.4.1", "openvino-genai": "2026.4.1"},
+                "openvino": {
+                    "importable": True,
+                    "version": "2026.4.1",
+                    "devices": [{"id": "NPU", "properties": {"FULL_DEVICE_NAME": "Intel AI Boost"}, "plugins": {}}],
+                },
+                "pci": [{"kind": "NPU", "slot": "00:0b.0", "vendor": "Intel", "device": "Meteor Lake NPU"}],
+                "modules": {"intel_vpu": {"loaded": True, "version": "1"}},
+                "nvidia": [],
+            },
+        )
+        resp = client.get("/system")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["source"] == "whisper-server"
+        assert data["runtime"]["engine"]
+        assert data["runtime"]["device"]
+        assert "OpenVINO GenAI WhisperPipeline" in data["runtime"]["interface"]
+        assert "Intel AI Boost" in data["text"]
+        assert "Meteor Lake NPU" in data["text"]
+        assert "Action:" in data["text"]
+
 
 class TestModelsRoute:
     def test_list_models(self, client):

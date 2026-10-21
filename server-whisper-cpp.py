@@ -19,6 +19,7 @@ import time
 import librosa
 from flask import Flask, request, jsonify
 
+import diagnostics
 import vocab
 
 app = Flask(__name__)
@@ -350,6 +351,28 @@ def transcribe_stream():
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "backend": "whisper.cpp", "model": model.model_path})
+
+
+@app.route("/system", methods=["GET"])
+def system_info():
+    report = diagnostics.collect()
+    report["source"] = "whisper-cpp-server"
+    report["libraries"]["whisper.cpp"] = _WHISPER_VERSION
+    report["runtime"] = {
+        "engine": "whisper.cpp",
+        "device": getattr(model, "device", "NPU"),
+        "model": getattr(model, "model_path", ""),
+        "interface": (
+            "whisper.cpp libwhisper.so, OpenVINO encoder on "
+            + str(getattr(model, "device", "NPU"))
+        ),
+        "whisper_cpp": _WHISPER_VERSION,
+        "pid": os.getpid(),
+        "bias": vocab.bias_status(),
+        "vocab": vocab.describe(),
+    }
+    report["text"] = diagnostics.format_report(report)
+    return jsonify(report)
 
 
 @app.route("/models", methods=["GET"])

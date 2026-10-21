@@ -427,3 +427,37 @@ export function openVocabEditor (extPath) {
   logDebug('Vocabulary editor not found')
   return false
 }
+
+export function openAbout (extPath, host, port) {
+  const home = GLib.get_home_dir()
+  const candidates = []
+  if (extPath)
+    candidates.push(GLib.build_filenamev([extPath, '..', 'about.py']))
+  candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'whisper-npu-server', 'about.py']))
+  candidates.push(GLib.build_filenamev([home, 'src', 'whisper-npu-server', 'about.py']))
+
+  const safeHost = String(host || '127.0.0.1').replace(/[^A-Za-z0-9._:-]/g, '') || '127.0.0.1'
+  const safePort = Number(port) || 5000
+
+  for (const path of candidates) {
+    if (!GLib.file_test(path, GLib.FileTest.EXISTS))
+      continue
+    const cmd = [
+      'python3',
+      GLib.shell_quote(path),
+      '--host',
+      GLib.shell_quote(safeHost),
+      '--port',
+      String(safePort)
+    ].join(' ')
+    try {
+      GLib.spawn_command_line_async(cmd)
+      return true
+    } catch (e) {
+      logDebug(`About dialog failed: ${e.message}`)
+      return false
+    }
+  }
+  logDebug('About dialog not found')
+  return false
+}

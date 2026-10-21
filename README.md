@@ -253,6 +253,10 @@ If the file is missing, the built-in lists in `vocab.py` are used. In the editor
 
 Add `[cs]` at the end of a line for a case-sensitive pattern. Invalid patterns are refused on save.
 
+## About
+
+The tray menu **About...** (GNOME menu, GNOME preferences, and the KDE popup) opens `about.py`. The dialog reads `GET /system` from the server the tray is pointed at, so the versions match the process that runs Whisper. It lists the detected NPU and GPUs, the OpenVINO or faster-whisper interface in use, library versions, the Python executable, driver modules, and the current bias failover with the action to take. Copy is on the dialog. If the server is down, the dialog says so and shows this Python instead.
+
 ## Service Architecture
 
 ```mermaid

@@ -20,6 +20,7 @@ import {
   writeServiceOverride,
   writeSettingsJson,
   openVocabEditor,
+  openAbout,
   restartService,
   typeText,
   backspaceN,
@@ -657,6 +658,16 @@ const WhisperIndicator = GObject.registerClass(
           Main.notify(_('Whisper NPU'), _('Vocabulary editor not found'))
       })
       this.menu.addMenuItem(vocabItem)
+
+      const aboutItem = new PopupMenu.PopupMenuItem(_('About...'))
+      this._addIconToMenuItem(aboutItem, 'help-about-symbolic')
+      aboutItem.connect('activate', () => {
+        const host = this._settings.get_string('server-host')
+        const port = this._settings.get_int('server-port')
+        if (!openAbout(this._extension.path, host, port))
+          Main.notify(_('Whisper NPU'), _('About dialog not found'))
+      })
+      this.menu.addMenuItem(aboutItem)
 
       const prefsItem = new PopupMenu.PopupMenuItem(_('Preferences...'))
       this._addIconToMenuItem(prefsItem, 'preferences-other-symbolic')

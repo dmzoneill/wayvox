@@ -139,6 +139,7 @@ def test_generate_biased_retries_when_npu_rejects_prompt(vocab_path, monkeypatch
 def test_configure_backend_keeps_npu_bias_until_failover(vocab_path, monkeypatch, caplog):
     monkeypatch.setattr(vocab, "_rejected_bias", set())
     monkeypatch.setattr(vocab, "_failover_logged", set())
+    monkeypatch.setattr(vocab, "_failover_reasons", [])
     monkeypatch.setattr(vocab, "_bias_confirmed", False)
     vocab.configure_backend("CPU")
     assert vocab._rejected_bias == set()
@@ -160,6 +161,7 @@ def test_configure_backend_keeps_npu_bias_until_failover(vocab_path, monkeypatch
 def test_npu_reject_log_names_upgrade(vocab_path, monkeypatch, caplog):
     monkeypatch.setattr(vocab, "_rejected_bias", set())
     monkeypatch.setattr(vocab, "_failover_logged", set())
+    monkeypatch.setattr(vocab, "_failover_reasons", [])
     vocab.configure_backend("CPU")
 
     def backend(*_args, **kwargs):
@@ -179,11 +181,13 @@ def test_npu_reject_log_names_upgrade(vocab_path, monkeypatch, caplog):
     assert "regex" in warnings[0].lower()
     assert "restart whisper-server" in warnings[0]
     assert vocab.bias_status()["mode"] == "regex"
+    assert vocab.bias_status()["failover"] == ["unsupported"]
 
 
 def test_prompt_slot_log_names_max_prompt_len(vocab_path, monkeypatch, caplog):
     monkeypatch.setattr(vocab, "_rejected_bias", set())
     monkeypatch.setattr(vocab, "_failover_logged", set())
+    monkeypatch.setattr(vocab, "_failover_reasons", [])
     vocab.configure_backend("NPU")
 
     def backend(*_args, **kwargs):
@@ -199,10 +203,12 @@ def test_prompt_slot_log_names_max_prompt_len(vocab_path, monkeypatch, caplog):
     assert "MAX_PROMPT_LEN" in text
     assert "replacement rule" in text
     assert vocab.bias_status()["mode"] == "regex"
+    assert vocab.bias_status()["failover"] == ["prompt_slot"]
 
 
 def test_load_whisper_pipeline_falls_back_when_static_flag_rejected(monkeypatch, caplog):
     monkeypatch.setattr(vocab, "_failover_logged", set())
+    monkeypatch.setattr(vocab, "_failover_reasons", [])
     calls = []
 
     def factory(path, **kwargs):
@@ -220,10 +226,12 @@ def test_load_whisper_pipeline_falls_back_when_static_flag_rejected(monkeypatch,
     assert "Failover:" in caplog.text
     assert "2026.4.1" in caplog.text
     assert vocab.bias_status()["pipeline"] == "default"
+    assert vocab.bias_status()["failover"] == ["static_pipeline"]
 
 
 def test_load_whisper_pipeline_keeps_stateful_on_npu(monkeypatch):
     monkeypatch.setattr(vocab, "_failover_logged", set())
+    monkeypatch.setattr(vocab, "_failover_reasons", [])
 
     def factory(path, **kwargs):
         assert kwargs["STATIC_PIPELINE"] is False
