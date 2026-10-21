@@ -2,11 +2,15 @@
 
 Terms bias the decoder through initial_prompt and hotwords when the
 backend accepts them. The first transcription tries both. GenAI 2025.4's
-static NPU pipeline rejects the arguments. GenAI 2026.4 accepts them, then
-fails when the prefill exceeds the 4 token NPU slot. Either failure drops
-the arguments for the rest of the process and logs the upgrade that would
-enable decoder bias. Replacement rules still fix mishears the model emits,
-such as "polar quest" -> "pull request".
+static NPU pipeline rejects the arguments. GenAI 2026.4 accepts them.
+The NPU plugin then compiles Whisper with whisper_max_prompt_size = 4
+(llm_compiled_model.hpp). That path ignores NPUW_LLM_MAX_PROMPT_LEN.
+MAX_PROMPT_LEN is also rejected by the encoder compile. English-only
+prefill spends 3 of the 4 tokens on prev_sot, start-of-transcript, and
+no-timestamps, so one content token fits and "pull request" (two tokens)
+does not. Either failure drops the arguments for the rest of the process.
+WHISPER_DEVICE=GPU sends the full list. Replacement rules still fix
+mishears the model emits, such as "polar quest" -> "pull request".
 
 The editable file is ~/.config/whisper-npu/vocabulary.json. make install
 copies share/vocabulary.json there when that file is missing, and leaves an
@@ -666,10 +670,13 @@ def _log_failover(reason, dropped, exc):
             "Failover: NPU Whisper prompt slot is 4 tokens, shorter than %s. "
             "Error: %s. Dropped %s for the rest of this process so the next utterance skips the failed inference. "
             "Regex replacements in %s still correct misheard terms. "
-            "Action: do not set MAX_PROMPT_LEN. The stateful pipeline forwards that option to the NPU encoder compile and the plugin rejects it. "
-            "Decoder bias needs an OpenVINO release that compiles a longer NPU prompt slot. "
-            "Installed openvino-genai is %s. After upgrading, restart whisper-server. "
-            "Until the slot grows, add a replacement rule for any term the model still mishears.",
+            "The slot is the OpenVINO NPU constant whisper_max_prompt_size. Whisper ignores NPUW_LLM_MAX_PROMPT_LEN. "
+            "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name, and the whisper compiler does not read it. "
+            "English-only prefill uses prev_sot, start-of-transcript, and no-timestamps, so one content token fits. "
+            "pull request is two tokens. "
+            "Set WHISPER_DEVICE=GPU and restart whisper-server to send the full term list. "
+            "An OpenVINO build that raises whisper_max_prompt_size is what makes that list fit on NPU. "
+            "Installed openvino-genai is %s. Until then, add a replacement rule for any term the model still mishears.",
             keys,
             _one_line(exc),
             keys,

@@ -300,9 +300,10 @@ def bias_action(bias):
         notes.append(
             "Failover: NPU Whisper prompt slot is 4 tokens, so a technical term list does not fit. "
             "initial_prompt and hotwords were dropped for this process. Regex replacements still run. "
-            "Action: do not set MAX_PROMPT_LEN. The stateful pipeline forwards that option to the "
-            "NPU encoder compile and the plugin rejects it. Decoder bias needs an OpenVINO release "
-            "that compiles a longer NPU prompt slot. After upgrading, restart whisper-server. "
+            "The slot is the OpenVINO constant whisper_max_prompt_size. Whisper ignores NPUW_LLM_MAX_PROMPT_LEN. "
+            "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
+            "Set WHISPER_DEVICE=GPU and restart whisper-server to send the full term list. "
+            "An OpenVINO build that raises whisper_max_prompt_size is what makes that list fit on NPU. "
             "Until then, add a replacement rule for any term the model still mishears."
         )
     if notes:

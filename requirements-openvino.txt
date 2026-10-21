@@ -1,7 +1,8 @@
 # GenAI 2026.4 runs NPU Whisper on the stateful pipeline by default.
-# That path accepts initial_prompt and hotwords. The server still runs
-# on older GenAI: a missing STATIC_PIPELINE option or a rejected prompt
-# fails over to regex replacements and logs the upgrade step.
+# That path accepts initial_prompt and hotwords. The NPU plugin still
+# hardcodes whisper_max_prompt_size to 4 and ignores NPUW_LLM_MAX_PROMPT_LEN.
+# MAX_PROMPT_LEN is rejected by the encoder. WHISPER_DEVICE=GPU sends the
+# full term list. A rejected prompt fails over to regex and logs that.
 openvino>=2026.4.1
 openvino-tokenizers>=2026.4.1
 openvino-genai>=2026.4.1
