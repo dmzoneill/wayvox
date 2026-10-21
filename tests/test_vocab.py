@@ -149,6 +149,33 @@ def test_configure_backend_skips_npu_bias(vocab_path, monkeypatch):
     assert vocab.generate_biased(backend, language="<|en|>") == "ok"
 
 
+def test_generate_biased_retries_when_npu_prompt_slot_is_short(vocab_path, monkeypatch):
+    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    calls = []
+
+    def backend(*_args, **kwargs):
+        calls.append(set(kwargs))
+        if "initial_prompt" in kwargs or "hotwords" in kwargs:
+            raise RuntimeError("Check '*roi_end <= *max_dim' failed")
+        return "ok"
+
+    assert vocab.generate_biased(backend, language="<|en|>") == "ok"
+    assert calls[-1] == {"language"}
+
+
+def test_generate_biased_sends_prompt_and_hotwords(vocab_path, monkeypatch):
+    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    seen = {}
+
+    def backend(*_args, **kwargs):
+        seen.update(kwargs)
+        return "ok"
+
+    assert vocab.generate_biased(backend, language="<|en|>") == "ok"
+    assert seen["initial_prompt"]
+    assert "pull request" in seen["hotwords"]
+
+
 def test_generate_biased_does_not_swallow_other_errors(vocab_path, monkeypatch):
     monkeypatch.setattr(vocab, "_rejected_bias", set())
 

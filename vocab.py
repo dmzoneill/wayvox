@@ -1,8 +1,9 @@
 """Technical vocabulary for Whisper dictation.
 
-Terms bias the decoder (initial_prompt and hotwords) on devices that accept
-them. OpenVINO NPU rejects both before inference. Replacement rules still
-fix mishears the model emits, such as "polar quest" -> "pull request".
+Terms bias the decoder through initial_prompt and hotwords on devices
+that accept them. OpenVINO NPU compiles a 4 token prompt slot, which is
+too small for this list, so those arguments are not sent there. Replacement
+rules still fix mishears the model emits, such as "polar quest" -> "pull request".
 
 The editable file is ~/.config/whisper-npu/vocabulary.json. make install
 copies share/vocabulary.json there when that file is missing, and leaves an
@@ -518,10 +519,14 @@ _BIAS_KEYS = ("hotwords", "initial_prompt")
 
 
 def configure_backend(device):
-    """Skip bias arguments this device is known to reject.
+    """Skip decoder bias on NPU.
 
-    OpenVINO's static Whisper pipeline on NPU raises before inference when
-    initial_prompt or hotwords is set. Regex replacements still run.
+    GenAI 2026.4 runs NPU Whisper on the stateful pipeline, so it no longer
+    rejects initial_prompt up front. The compiled prompt slot is still 4
+    tokens. MAX_PROMPT_LEN would raise it, but that key is forwarded to the
+    encoder compile and the NPU plugin rejects the option. A vocabulary does
+    not fit in the 4 tokens, and a longer prefill fails during inference.
+    Regex replacements still run.
     """
     if not str(device or "").upper().startswith("NPU"):
         return
@@ -529,8 +534,8 @@ def configure_backend(device):
     _rejected_bias.update(_BIAS_KEYS)
     if fresh:
         log.info(
-            "NPU Whisper does not accept %s. Vocabulary replacements still apply.",
-            " or ".join(fresh),
+            "NPU Whisper prompt slot is 4 tokens. Skipping %s. Vocabulary replacements still apply.",
+            " and ".join(fresh),
         )
 
 
@@ -550,6 +555,9 @@ def _rejected_keys_in_error(exc, attempt):
     if isinstance(exc, TypeError) and "unexpected keyword" in lower:
         present = [key for key in _BIAS_KEYS if key in attempt]
         return present[:1]
+    # Prefill longer than the compiled NPU prompt slot.
+    if "roi_end" in lower:
+        return [key for key in _BIAS_KEYS if key in attempt]
     return []
 
 
@@ -557,7 +565,9 @@ def generate_biased(fn, *args, **kwargs):
     """Call a Whisper generate/transcribe function with prompt and hotwords.
 
     Backends that reject one of those arguments are retried without it.
-    OpenVINO NPU raises a runtime error, not TypeError, for both arguments.
+    OpenVINO GenAI 2025.4's static NPU pipeline raises a runtime error, not
+    TypeError, for both arguments. GenAI 2026.4 accepts the arguments, then
+    fails inference when the prefill is longer than the 4 token NPU slot.
     Any other failure is raised as-is.
     """
     prompt = bias()

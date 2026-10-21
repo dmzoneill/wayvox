@@ -220,11 +220,16 @@ class TestModelManager:
         open(os.path.join(model_mgr.models_dir, "not-a-dir.txt"), "w").close()
         assert model_mgr.list_models() == []
 
-    def test_load_model_cache_miss(self, model_mgr):
+    def test_load_model_cache_miss(self, model_mgr, monkeypatch):
+        monkeypatch.setattr(server_mod, "ENGINE", "openvino")
+        monkeypatch.setattr(server_mod, "DEVICE", "NPU")
+        monkeypatch.setattr(server_mod, "_openvino_genai", _mock_ov)
         model_dir = os.path.join(model_mgr.models_dir, "whisper-small-en")
         os.makedirs(model_dir, exist_ok=True)
-        pipe = model_mgr.load_model("whisper-small-en")
-        _mock_ov.WhisperPipeline.assert_called_once_with(model_dir, device="NPU")
+        model_mgr.load_model("whisper-small-en")
+        _mock_ov.WhisperPipeline.assert_called_once_with(
+            model_dir, device="NPU", STATIC_PIPELINE=False
+        )
         assert "whisper-small-en" in model_mgr.pipelines
 
     def test_load_model_cache_hit(self, model_mgr):

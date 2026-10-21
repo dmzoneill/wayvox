@@ -383,13 +383,15 @@ curl http://127.0.0.2:5000/models
 
 | Package | Version | Used By |
 |---------|---------|---------|
-| openvino | >= 2025.4.0 | server-native.py |
-| openvino-genai | >= 2025.4.0 | server-native.py |
-| openvino-tokenizers | >= 2025.4.0 | server-native.py |
+| openvino | >= 2026.4.1 | server-native.py |
+| openvino-genai | >= 2026.4.1 | server-native.py |
+| openvino-tokenizers | >= 2026.4.1 | server-native.py |
 | librosa | >= 0.10.2 | server-native.py, server-whisper-cpp.py |
 | flask | >= 3.1.0 | server-native.py, server-whisper-cpp.py |
 | aiohttp | >= 3.9.0 | push-to-talk.py |
 | evdev | >= 1.9.0 | push-to-talk.py |
+
+OpenVINO GenAI 2026.4 or newer is required for NPU dictation. That release defaults Whisper to the stateful pipeline. GenAI 2025.4 compiles a static pipeline that rejects `initial_prompt` and `hotwords` before inference. The NPU prompt slot is still 4 tokens, and `MAX_PROMPT_LEN` cannot raise it: the stateful pipeline forwards that option to the encoder compile, which the NPU plugin rejects. Vocabulary terms are applied by the regex replacements instead.
 
 ### System
 

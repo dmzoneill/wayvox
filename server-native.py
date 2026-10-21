@@ -96,6 +96,7 @@ if __name__ == "__main__":
         try:
             import openvino_genai
             _openvino_genai = openvino_genai
+            logger.info("OpenVINO GenAI %s", getattr(openvino_genai, "__version__", "unknown"))
         except ImportError:
             logger.error("OpenVINO engine selected but openvino-genai not installed")
             raise
@@ -181,7 +182,18 @@ class ModelManager:
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"Model {model_name} not found at {model_path}")
             logger.info(f"Loading {model_name} on {DEVICE} (OpenVINO)")
-            self.pipelines[model_name] = _openvino_genai.WhisperPipeline(str(model_path), device=DEVICE)
+            # 2025.4 defaults NPU to the static pipeline, which rejects
+            # initial_prompt. 2026.4 defaults to stateful. Force stateful so
+            # an older default cannot trip that check. The prompt slot is
+            # still 4 tokens: MAX_PROMPT_LEN would raise it, but the stateful
+            # pipeline forwards that key to the encoder and the NPU plugin
+            # rejects it. configure_backend skips the bias instead.
+            pipe_kwargs = {}
+            if str(DEVICE).upper().startswith("NPU"):
+                pipe_kwargs["STATIC_PIPELINE"] = False
+            self.pipelines[model_name] = _openvino_genai.WhisperPipeline(
+                str(model_path), device=DEVICE, **pipe_kwargs
+            )
         else:
             assert _faster_whisper_cls is not None
             cuda_index = int(DEVICE.split(":")[1]) if ":" in DEVICE else 0

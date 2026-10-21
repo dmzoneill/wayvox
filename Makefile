@@ -101,7 +101,7 @@ install-python: ## Install Python packages (auto-detects NPU/GPU/CUDA hardware)
 	$(PYTHON) -m pip install --user -r $(PROJECT_DIR)/requirements-base.txt; \
 	if [ $$HAS_INTEL -eq 1 ] || [ $$HAS_NPU -eq 1 ] || [ $$HAS_ARC -eq 1 ]; then \
 		echo ""; \
-		echo "=== Installing OpenVINO (NPU / Intel GPU / ARC / CPU) ==="; \
+		echo "=== Installing OpenVINO GenAI >= 2026.4 (NPU / Intel GPU / ARC / CPU) ==="; \
 		$(PYTHON) -m pip install --user -r $(PROJECT_DIR)/requirements-openvino.txt; \
 	fi; \
 	if [ $$HAS_CUDA -eq 1 ]; then \
