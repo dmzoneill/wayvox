@@ -240,8 +240,8 @@ python3 push-to-talk.py --key KEY_RIGHTCTRL --backend openvino --stream-interval
 
 Whisper often hears computer terms as everyday words (`polar quest` instead of `pull request`). Two fixes run on every transcription:
 
-1. **Bias.** A term list is sent as the Whisper `initial_prompt` and, when the backend accepts it, as `hotwords`.
-2. **Replacements.** Python regular expressions rewrite leftovers the model still gets wrong.
+1. **Bias.** A term list is sent as the Whisper `initial_prompt` and, when the backend accepts it, as `hotwords`. OpenVINO on NPU rejects both arguments. CPU, GPU, and faster-whisper still receive them.
+2. **Replacements.** Python regular expressions rewrite leftovers the model still gets wrong. These run on every device, including NPU.
 
 Built-in lists cover git, GitHub, Kubernetes, containers, databases, web APIs, languages, and Linux commands. `make install` copies `share/vocabulary.json` to `~/.config/whisper-npu/vocabulary.json` when that file is absent. A later install leaves an existing file alone. Edit it from the tray: **Edit Vocabulary...** in the GNOME menu, the GNOME preferences window, or the KDE popup. That opens `vocab-editor.py`. The server reloads the file on the next transcription. No restart.
 

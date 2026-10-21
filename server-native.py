@@ -83,6 +83,8 @@ def _detect_engine_and_device():
 
 ENGINE, DEVICE = _detect_engine_and_device()
 logger.info(f"Engine: {ENGINE}  Device: {DEVICE}")
+if ENGINE == "openvino":
+    vocab.configure_backend(DEVICE)
 
 _openvino_genai = None
 _faster_whisper_cls = None

@@ -1,7 +1,8 @@
 """Technical vocabulary for Whisper dictation.
 
-Terms bias the decoder (initial_prompt and hotwords). Replacement rules
-fix mishears the model still emits, such as "polar quest" -> "pull request".
+Terms bias the decoder (initial_prompt and hotwords) on devices that accept
+them. OpenVINO NPU rejects both before inference. Replacement rules still
+fix mishears the model emits, such as "polar quest" -> "pull request".
 
 The editable file is ~/.config/whisper-npu/vocabulary.json. make install
 copies share/vocabulary.json there when that file is missing, and leaves an
@@ -513,48 +514,71 @@ def apply(text, path=None):
     return text
 
 
+_BIAS_KEYS = ("hotwords", "initial_prompt")
+
+
+def configure_backend(device):
+    """Skip bias arguments this device is known to reject.
+
+    OpenVINO's static Whisper pipeline on NPU raises before inference when
+    initial_prompt or hotwords is set. Regex replacements still run.
+    """
+    if not str(device or "").upper().startswith("NPU"):
+        return
+    fresh = [key for key in _BIAS_KEYS if key not in _rejected_bias]
+    _rejected_bias.update(_BIAS_KEYS)
+    if fresh:
+        log.info(
+            "NPU Whisper does not accept %s. Vocabulary replacements still apply.",
+            " or ".join(fresh),
+        )
+
+
+def _remember_rejected(key):
+    if key not in _rejected_bias:
+        _rejected_bias.add(key)
+        log.warning("Whisper backend does not accept %s. Continuing without it.", key)
+
+
+def _rejected_keys_in_error(exc, attempt):
+    """Return bias kwargs this exception says the backend refused."""
+    message = str(exc)
+    named = [key for key in _BIAS_KEYS if key in attempt and key in message]
+    lower = message.lower()
+    if named and (isinstance(exc, TypeError) or "not supported" in lower or "unexpected" in lower):
+        return named
+    if isinstance(exc, TypeError) and "unexpected keyword" in lower:
+        present = [key for key in _BIAS_KEYS if key in attempt]
+        return present[:1]
+    return []
+
+
 def generate_biased(fn, *args, **kwargs):
     """Call a Whisper generate/transcribe function with prompt and hotwords.
 
     Backends that reject one of those arguments are retried without it.
-    A TypeError from the bare call is raised as-is.
+    OpenVINO NPU raises a runtime error, not TypeError, for both arguments.
+    Any other failure is raised as-is.
     """
     prompt = bias()
-    primary = dict(kwargs)
-    if prompt.get("initial_prompt"):
-        primary["initial_prompt"] = prompt["initial_prompt"]
-    if prompt.get("hotwords"):
-        primary["hotwords"] = prompt["hotwords"]
-
-    variants = [primary]
-    if "hotwords" in primary:
-        variants.append({key: value for key, value in primary.items() if key != "hotwords"})
-    bare = {key: value for key, value in primary.items() if key not in ("initial_prompt", "hotwords")}
-    if bare != variants[-1]:
-        variants.append(bare)
-
-    last_exc = None
-    for index, attempt in enumerate(variants):
-        try:
-            result = fn(*args, **attempt)
-        except TypeError as exc:
-            last_exc = exc
-            if index == len(variants) - 1:
-                raise
+    attempt = dict(kwargs)
+    for key in _BIAS_KEYS:
+        if key in _rejected_bias:
             continue
-        if index:
-            dropped = [
-                key for key in ("hotwords", "initial_prompt")
-                if key in primary and key not in attempt
-            ]
+        value = prompt.get(key)
+        if value:
+            attempt[key] = value
+
+    while True:
+        try:
+            return fn(*args, **attempt)
+        except Exception as exc:
+            dropped = _rejected_keys_in_error(exc, attempt)
+            if not dropped:
+                raise
             for key in dropped:
-                if key not in _rejected_bias:
-                    _rejected_bias.add(key)
-                    log.warning("Whisper backend does not accept %s. Continuing without it.", key)
-        return result
-    if last_exc:
-        raise last_exc
-    return fn(*args, **kwargs)
+                attempt.pop(key, None)
+                _remember_rejected(key)
 
 
 def describe(path=None):

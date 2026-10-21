@@ -114,6 +114,51 @@ def test_generate_biased_drops_rejected_hotwords(vocab_path, monkeypatch):
     assert vocab.generate_biased(backend, language="<|en|>") == "ok"
 
 
+def test_generate_biased_retries_when_npu_rejects_prompt(vocab_path, monkeypatch):
+    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    calls = []
+
+    def backend(*_args, **kwargs):
+        calls.append(set(kwargs))
+        if "initial_prompt" in kwargs:
+            raise RuntimeError(
+                "Check failed: 'initial_prompt' parameter is not supported on NPU device."
+            )
+        if "hotwords" in kwargs:
+            raise RuntimeError("'hotwords' parameter is not supported on NPU device.")
+        assert kwargs["language"] == "<|en|>"
+        return "ok"
+
+    assert vocab.generate_biased(backend, language="<|en|>") == "ok"
+    assert vocab.generate_biased(backend, language="<|en|>") == "ok"
+    assert calls[-1] == {"language"}
+    assert vocab._rejected_bias == {"initial_prompt", "hotwords"}
+
+
+def test_configure_backend_skips_npu_bias(vocab_path, monkeypatch):
+    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    vocab.configure_backend("CPU")
+    assert vocab._rejected_bias == set()
+    vocab.configure_backend("NPU")
+
+    def backend(*_args, **kwargs):
+        assert "initial_prompt" not in kwargs
+        assert "hotwords" not in kwargs
+        return "ok"
+
+    assert vocab.generate_biased(backend, language="<|en|>") == "ok"
+
+
+def test_generate_biased_does_not_swallow_other_errors(vocab_path, monkeypatch):
+    monkeypatch.setattr(vocab, "_rejected_bias", set())
+
+    def backend(*_args, **kwargs):
+        raise RuntimeError("model failed")
+
+    with pytest.raises(RuntimeError, match="model failed"):
+        vocab.generate_biased(backend)
+
+
 def test_parse_rules_reports_bad_lines():
     _rules, errors = vocab.parse_rules("not a rule\n\\bfoo\\b => bar")
     assert errors
