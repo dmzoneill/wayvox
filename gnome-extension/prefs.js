@@ -4,6 +4,8 @@ import Gio from 'gi://Gio'
 
 import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js'
 
+import { openVocabEditor } from './utils.js'
+
 export default class WhisperNpuPreferences extends ExtensionPreferences {
   fillPreferencesWindow (window) {
     const settings = this.getSettings()
@@ -12,6 +14,7 @@ export default class WhisperNpuPreferences extends ExtensionPreferences {
 
     page.add(this._buildServerGroup(settings))
     page.add(this._buildOptionsGroup(settings))
+    page.add(this._buildVocabularyGroup())
 
     window.add(page)
   }
@@ -131,6 +134,27 @@ export default class WhisperNpuPreferences extends ExtensionPreferences {
     hfRow.activatable = false
     group.add(hfRow)
 
+    return group
+  }
+
+  _buildVocabularyGroup () {
+    const group = new Adw.PreferencesGroup({
+      title: 'Technical Vocabulary',
+      description: 'Bias Whisper toward computer terms and fix leftover mishears such as polar quest. Edits apply on the next transcription.'
+    })
+
+    const button = new Gtk.Button({
+      label: 'Edit Vocabulary...',
+      valign: Gtk.Align.CENTER
+    })
+    const row = new Adw.ActionRow({ title: 'Terms and replacements' })
+    row.add_suffix(button)
+    row.activatable = false
+    button.connect('clicked', () => {
+      if (!openVocabEditor(this.path))
+        row.set_subtitle('Editor not found. Expected vocab-editor.py in the whisper-npu-server checkout.')
+    })
+    group.add(row)
     return group
   }
 }

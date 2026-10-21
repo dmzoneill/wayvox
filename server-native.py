@@ -10,6 +10,8 @@ import threading
 
 SERVER_START_TIME = time.time()
 
+import vocab
+
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -218,11 +220,13 @@ class ModelManager:
             gen_kwargs: dict = {}
             if language:
                 gen_kwargs["language"] = f"<|{language}|>"
-            result = pipeline.generate(audio_np, **gen_kwargs)
+            result = vocab.generate_biased(pipeline.generate, audio_np, **gen_kwargs)
             elapsed = time.time() - t0
             return str(result), _extract_perf_metrics(result), elapsed
         else:
-            segments, info = pipeline.transcribe(audio_np, language=language or None, beam_size=5)
+            segments, info = vocab.generate_biased(
+                pipeline.transcribe, audio_np, language=language or None, beam_size=5
+            )
             text = "".join(s.text for s in segments)
             elapsed = time.time() - t0
             perf = {"language": info.language, "language_probability": round(info.language_probability, 3)}
@@ -243,7 +247,7 @@ class ModelManager:
                     gen_kwargs: dict = {"streamer": cb, "return_timestamps": False}
                     if language:
                         gen_kwargs["language"] = f"<|{language}|>"
-                    pipeline.generate(audio_np, **gen_kwargs)
+                    vocab.generate_biased(pipeline.generate, audio_np, **gen_kwargs)
                 except Exception as e:
                     logger.error(f"Streaming error: {e}")
                 finally:
@@ -256,7 +260,9 @@ class ModelManager:
                     break
                 yield chunk
         else:
-            segments, _ = pipeline.transcribe(audio_np, language=language or None, beam_size=5)
+            segments, _ = vocab.generate_biased(
+                pipeline.transcribe, audio_np, language=language or None, beam_size=5
+            )
             for segment in segments:
                 yield segment.text
 
@@ -267,11 +273,13 @@ class ModelManager:
             gen_kwargs: dict = {"return_timestamps": True}
             if language:
                 gen_kwargs["language"] = f"<|{language}|>"
-            result = pipeline.generate(audio_np, **gen_kwargs)
+            result = vocab.generate_biased(pipeline.generate, audio_np, **gen_kwargs)
             chunks = [{"text": c.text, "start": round(c.start_ts, 3), "end": round(c.end_ts, 3)} for c in result.chunks]
             return str(result), chunks, _extract_perf_metrics(result)
         else:
-            segments, _ = pipeline.transcribe(audio_np, language=language or None, word_timestamps=False, beam_size=5)
+            segments, _ = vocab.generate_biased(
+                pipeline.transcribe, audio_np, language=language or None, word_timestamps=False, beam_size=5
+            )
             segs = list(segments)
             text = "".join(s.text for s in segs)
             chunks = [{"text": s.text, "start": round(s.start, 3), "end": round(s.end, 3)} for s in segs]
@@ -415,6 +423,7 @@ def transcribe_with_model(model_name):
         audio_np = _load_audio(request)
         language = request.args.get("language")
         text, perf, elapsed = model_manager.transcribe(model_name, audio_np, language)
+        text = vocab.apply(text)
         duration = len(audio_np) / 16000
         logger.info(f"Transcribed {duration:.1f}s audio in {elapsed:.2f}s ({duration/elapsed:.1f}x realtime)")
         metrics.record_transcription(elapsed, duration, perf)
@@ -451,12 +460,14 @@ def transcribe_stream_with_model(model_name=None):
             t0 = time.time()
             full_text = []
             for chunk in model_manager.transcribe_stream(model_name, audio_np, language):
-                full_text.append(chunk)
-                yield f"data: {json.dumps({'text': chunk})}\n\n"
+                piece = chunk if isinstance(chunk, str) else str(chunk)
+                full_text.append(piece)
+                yield f"data: {json.dumps({'text': vocab.apply(piece)})}\n\n"
             elapsed = time.time() - t0
             logger.info(f"Streamed {duration:.1f}s audio in {elapsed:.2f}s ({duration/elapsed:.1f}x realtime)")
             metrics.record_transcription(elapsed, duration)
-            yield f"data: {json.dumps({'done': True, 'full_text': ''.join(full_text)})}\n\n"
+            corrected = vocab.apply("".join(full_text))
+            yield f"data: {json.dumps({'done': True, 'full_text': corrected})}\n\n"
 
         return Response(generate(), mimetype="text/event-stream")
     except ValueError as e:
@@ -474,6 +485,10 @@ def transcribe_timestamps_with_model(model_name):
         language = request.args.get("language")
         t0 = time.time()
         text, chunks, perf = model_manager.transcribe_timestamps(model_name, audio_np, language)
+        text = vocab.apply(text)
+        for chunk in chunks:
+            if isinstance(chunk.get("text"), str):
+                chunk["text"] = vocab.apply(chunk["text"])
         elapsed = time.time() - t0
         duration = len(audio_np) / 16000
         logger.info(f"Timestamped {duration:.1f}s audio in {elapsed:.2f}s ({len(chunks)} chunks)")
@@ -621,6 +636,14 @@ model_manager = ModelManager()
 llm_manager = LLMManager()
 
 if __name__ == "__main__":
+    _vocab_info = vocab.describe()
+    logger.info(
+        "Vocabulary: %d terms, %d replacements, prompt %d chars (%s)",
+        _vocab_info["terms"],
+        _vocab_info["replacements"],
+        _vocab_info["initial_prompt_chars"],
+        _vocab_info["path"],
+    )
     model_manager.load_model(model_manager.default_model)
     if LLM_MODEL:
         try:

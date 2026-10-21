@@ -469,6 +469,16 @@ class TestTranscribeRoute:
         data = resp.get_json()
         assert data["text"] == "hello world"
 
+    def test_vocabulary_replacements(self, client, wav_bytes):
+        with patch.object(
+            server_mod.model_manager,
+            "transcribe",
+            return_value=("open a polar quest", {}, 0.01),
+        ):
+            resp = client.post("/transcribe", data=wav_bytes)
+        assert resp.status_code == 200
+        assert resp.get_json()["text"] == "open a pull request"
+
     def test_exception(self, client, wav_bytes):
         server_mod.model_manager.load_model = MagicMock(
             side_effect=RuntimeError("device error")

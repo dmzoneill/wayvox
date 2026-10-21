@@ -236,6 +236,23 @@ python3 push-to-talk.py --key KEY_RIGHTCTRL --backend openvino --stream-interval
 
 **Typing backends** (tried in order on Wayland): `ydotool` → `wtype` → `wl-copy` (clipboard fallback). On X11: `xdotool`.
 
+## Technical vocabulary
+
+Whisper often hears computer terms as everyday words (`polar quest` instead of `pull request`). Two fixes run on every transcription:
+
+1. **Bias.** A term list is sent as the Whisper `initial_prompt` and, when the backend accepts it, as `hotwords`.
+2. **Replacements.** Python regular expressions rewrite leftovers the model still gets wrong.
+
+Built-in lists cover git, GitHub, Kubernetes, containers, databases, web APIs, languages, and Linux commands. `make install` copies `share/vocabulary.json` to `~/.config/whisper-npu/vocabulary.json` when that file is absent. A later install leaves an existing file alone. Edit it from the tray: **Edit Vocabulary...** in the GNOME menu, the GNOME preferences window, or the KDE popup. That opens `vocab-editor.py`. The server reloads the file on the next transcription. No restart.
+
+If the file is missing, the built-in lists in `vocab.py` are used. In the editor, terms are one per line. Put the words Whisper gets wrong at the top, because the initial prompt is kept short. Replacements are one per line:
+
+```text
+\bpolar quests?\b => pull request
+```
+
+Add `[cs]` at the end of a line for a case-sensitive pattern. Invalid patterns are refused on save.
+
 ## Service Architecture
 
 ```mermaid
@@ -269,8 +286,9 @@ graph LR
 2. **System packages** — `ydotool`, `pipewire-pulseaudio`, `wtype`, `wl-clipboard`, `xdotool`
 3. **Permissions** — adds your user to the `input` group (for evdev keyboard access)
 4. **Default model** — downloads `whisper-small.en-fp16-ov` from HuggingFace if not already present
-5. **Services** — generates and installs three systemd user service files
-6. **Enable** — enables services to start on login
+5. **Vocabulary** — copies `share/vocabulary.json` to `~/.config/whisper-npu/vocabulary.json` if you do not already have one
+6. **Services** — generates and installs three systemd user service files
+7. **Enable** — enables services to start on login
 
 ### Makefile Targets
 
@@ -278,6 +296,7 @@ graph LR
 |--------|-------------|
 | `make install` | Full install: deps + model + services + permissions |
 | `make install-models` | Download the default OpenVINO model |
+| `make install-vocab` | Install the default vocabulary file if you have none |
 | `make start` | Start all services |
 | `make stop` | Stop all services |
 | `make restart` | Restart all services |

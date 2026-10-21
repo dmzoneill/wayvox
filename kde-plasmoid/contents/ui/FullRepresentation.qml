@@ -541,6 +541,28 @@ PlasmaExtras.Representation {
 
                 Kirigami.Separator { Layout.fillWidth: true }
 
+                PlasmaComponents.Button {
+                    Layout.fillWidth: true
+                    text: "Edit Vocabulary..."
+                    icon.name: "accessories-dictionary"
+                    onClicked: {
+                        var home = root.homeDir
+                        var cmd = "python3 \"" + home + "/src/usr/whisper-npu-server/vocab-editor.py\""
+                        cmd += " || python3 \"" + home + "/src/whisper-npu-server/vocab-editor.py\""
+                        root.executable.exec(cmd)
+                    }
+                }
+
+                PlasmaComponents.Label {
+                    Layout.fillWidth: true
+                    text: "Terms bias Whisper. Regex lines fix mishears such as polar quest."
+                    font.italic: true
+                    opacity: 0.7
+                    wrapMode: Text.WordWrap
+                }
+
+                Kirigami.Separator { Layout.fillWidth: true }
+
                 // ----- Export History -----
                 RowLayout {
                     Layout.fillWidth: true

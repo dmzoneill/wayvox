@@ -17,6 +17,12 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+# Keep server tests off the user's real vocabulary file.
+os.environ.setdefault(
+    "WHISPER_VOCAB_PATH",
+    os.path.join(os.path.expanduser("~"), ".cache", "whisper-npu-pytest-vocab-absent.json"),
+)
+
 
 # ---------------------------------------------------------------------------
 # Audio helpers

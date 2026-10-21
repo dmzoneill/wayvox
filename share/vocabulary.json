@@ -1,0 +1,483 @@
+{
+  "enabled": true,
+  "preamble": "Technical computer dictation. Terms:",
+  "terms": [
+    "pull request",
+    "merge request",
+    "GitHub",
+    "GitLab",
+    "Bitbucket",
+    "Kubernetes",
+    "kubectl",
+    "Docker",
+    "Dockerfile",
+    "docker compose",
+    "nginx",
+    "PostgreSQL",
+    "JSON",
+    "YAML",
+    "TOML",
+    "regex",
+    "localhost",
+    "OAuth",
+    "pytest",
+    "TypeScript",
+    "JavaScript",
+    "Python",
+    "Rust",
+    "Go",
+    "Node.js",
+    "npm",
+    "pnpm",
+    "pip",
+    "API",
+    "REST",
+    "GraphQL",
+    "gRPC",
+    "SQL",
+    "SQLite",
+    "MySQL",
+    "Redis",
+    "MongoDB",
+    "CI/CD",
+    "OpenVINO",
+    "Whisper",
+    "NPU",
+    "CUDA",
+    "PyTorch",
+    "NumPy",
+    "Hugging Face",
+    "OpenAI",
+    "FastAPI",
+    "Django",
+    "Flask",
+    "React",
+    "Vue",
+    "webhook",
+    "middleware",
+    "gitignore",
+    "cherry-pick",
+    "rebase",
+    "commit",
+    "branch",
+    "sudo",
+    "chmod",
+    "chown",
+    "systemd",
+    "SSH",
+    "UTF-8",
+    "base64",
+    "SHA-256",
+    "stdin",
+    "stdout",
+    "stderr",
+    "Terraform",
+    "Ansible",
+    "Helm",
+    "Minikube",
+    "Podman",
+    "Flatpak",
+    "ConfigMap",
+    "namespace",
+    "ingress",
+    "Elasticsearch",
+    "Kafka",
+    "RabbitMQ",
+    "Prometheus",
+    "Grafana",
+    "Neovim",
+    "VS Code",
+    "Wayland",
+    "PipeWire",
+    "segfault",
+    "stack trace",
+    "breakpoint",
+    "linter",
+    "async",
+    "boolean",
+    "microservice",
+    "repository",
+    "kernel",
+    "filesystem",
+    "endpoint",
+    "CORS",
+    "JWT",
+    "WebSocket",
+    "protobuf",
+    "cron",
+    "cluster",
+    "container"
+  ],
+  "replacements": [
+    {
+      "pattern": "\\bpolar quests?\\b",
+      "replacement": "pull request",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpuller quests?\\b",
+      "replacement": "pull request",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpull quests?\\b",
+      "replacement": "pull request",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpool requests?\\b",
+      "replacement": "pull request",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpulsar quests?\\b",
+      "replacement": "pull request",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpolar requests?\\b",
+      "replacement": "pull request",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bmerge a quest\\b",
+      "replacement": "merge request",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bget ?hub\\b",
+      "replacement": "GitHub",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bgit hub\\b",
+      "replacement": "GitHub",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bgit lab\\b",
+      "replacement": "GitLab",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bbit bucket\\b",
+      "replacement": "Bitbucket",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\b(?:kube|cube) (?:cuddle|control|ctl)\\b",
+      "replacement": "kubectl",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bkube c t l\\b",
+      "replacement": "kubectl",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\b(?:cooper|kube|cube) net(?:t)?(?:ies|es|ease)\\b",
+      "replacement": "Kubernetes",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bengine[\\s-]?x\\b",
+      "replacement": "nginx",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bn gin x\\b",
+      "replacement": "nginx",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpie tests?\\b",
+      "replacement": "pytest",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpie torch\\b",
+      "replacement": "PyTorch",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bnum pie\\b",
+      "replacement": "NumPy",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\brejex\\b",
+      "replacement": "regex",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\breg ex\\b",
+      "replacement": "regex",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bjay son\\b",
+      "replacement": "JSON",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\byam+els?\\b",
+      "replacement": "YAML",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\blocal host\\b",
+      "replacement": "localhost",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\boh auth\\b",
+      "replacement": "OAuth",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bo auth\\b",
+      "replacement": "OAuth",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bjava script\\b",
+      "replacement": "JavaScript",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\btype script\\b",
+      "replacement": "TypeScript",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpost ?gres(?:ql)?\\b",
+      "replacement": "PostgreSQL",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bsequel lite\\b",
+      "replacement": "SQLite",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bs q lite\\b",
+      "replacement": "SQLite",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bsequel\\b",
+      "replacement": "SQL",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bgraph q l\\b",
+      "replacement": "GraphQL",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\belastic search\\b",
+      "replacement": "Elasticsearch",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bterra form\\b",
+      "replacement": "Terraform",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bdocker file\\b",
+      "replacement": "Dockerfile",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bgit ignore\\b",
+      "replacement": "gitignore",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bneo vim\\b",
+      "replacement": "Neovim",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bv s code\\b",
+      "replacement": "VS Code",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bsue do\\b",
+      "replacement": "sudo",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\b(?:see|c) mod\\b",
+      "replacement": "chmod",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bch own\\b",
+      "replacement": "chown",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bweb pack\\b",
+      "replacement": "webpack",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bnext j s\\b",
+      "replacement": "Next.js",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bnode j s\\b",
+      "replacement": "Node.js",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bn p m\\b",
+      "replacement": "npm",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bp n p m\\b",
+      "replacement": "pnpm",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bfast a p i\\b",
+      "replacement": "FastAPI",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\brabbit m q\\b",
+      "replacement": "RabbitMQ",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bmongo d b\\b",
+      "replacement": "MongoDB",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bbase 64\\b",
+      "replacement": "base64",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bsha 256\\b",
+      "replacement": "SHA-256",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bu t f 8\\b",
+      "replacement": "UTF-8",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\butf 8\\b",
+      "replacement": "UTF-8",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bc i c d\\b",
+      "replacement": "CI/CD",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bci cd\\b",
+      "replacement": "CI/CD",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bopen a i\\b",
+      "replacement": "OpenAI",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bopen ai\\b",
+      "replacement": "OpenAI",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bhugging face\\b",
+      "replacement": "Hugging Face",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bweb hook\\b",
+      "replacement": "webhook",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bseg fault\\b",
+      "replacement": "segfault",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bgit re base\\b",
+      "replacement": "git rebase",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bconfig map\\b",
+      "replacement": "ConfigMap",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bstateful set\\b",
+      "replacement": "StatefulSet",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bdaemon set\\b",
+      "replacement": "DaemonSet",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bcron job\\b",
+      "replacement": "CronJob",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bopen vino\\b",
+      "replacement": "OpenVINO",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpipe wire\\b",
+      "replacement": "PipeWire",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bflat pack\\b",
+      "replacement": "Flatpak",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bpod man\\b",
+      "replacement": "Podman",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bmini cube\\b",
+      "replacement": "Minikube",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bdot env\\b",
+      "replacement": ".env",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bdot git\\b",
+      "replacement": ".git",
+      "ignore_case": true
+    },
+    {
+      "pattern": "\\bcherry pick\\b",
+      "replacement": "cherry-pick",
+      "ignore_case": true
+    }
+  ]
+}

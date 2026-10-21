@@ -19,6 +19,7 @@ import {
   downloadLlmModel,
   writeServiceOverride,
   writeSettingsJson,
+  openVocabEditor,
   restartService,
   typeText,
   backspaceN,
@@ -648,6 +649,14 @@ const WhisperIndicator = GObject.registerClass(
       this._addIconToMenuItem(this._restartServerItem, 'view-refresh-symbolic')
       this._restartServerItem.connect('activate', () => this._restartServer())
       this.menu.addMenuItem(this._restartServerItem)
+
+      const vocabItem = new PopupMenu.PopupMenuItem(_('Edit Vocabulary...'))
+      this._addIconToMenuItem(vocabItem, 'accessories-dictionary-symbolic')
+      vocabItem.connect('activate', () => {
+        if (!openVocabEditor(this._extension.path))
+          Main.notify(_('Whisper NPU'), _('Vocabulary editor not found'))
+      })
+      this.menu.addMenuItem(vocabItem)
 
       const prefsItem = new PopupMenu.PopupMenuItem(_('Preferences...'))
       this._addIconToMenuItem(prefsItem, 'preferences-other-symbolic')

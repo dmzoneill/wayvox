@@ -19,6 +19,8 @@ import time
 import librosa
 from flask import Flask, request, jsonify
 
+import vocab
+
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -260,6 +262,14 @@ class WhisperCppModel:
         params.n_threads = self.n_threads
         params.language = self.language
         params.no_speech_thold = self.no_speech_thold if no_speech_thold is None else no_speech_thold
+        # Keep the buffer alive until whisper_full returns. Warmup passes an
+        # explicit threshold and skips the prompt so silence is not biased.
+        prompt_buf = None
+        if no_speech_thold is None:
+            prompt = vocab.bias().get("initial_prompt") or ""
+            if prompt:
+                prompt_buf = prompt.encode("utf-8")
+                params.initial_prompt = prompt_buf
 
         arr = (ctypes.c_float * len(audio_f32))(*audio_f32)
         t0 = time.time()
@@ -278,6 +288,8 @@ class WhisperCppModel:
                 segments.append(text.decode("utf-8"))
 
         full_text = "".join(segments).strip()
+        if no_speech_thold is None:
+            full_text = vocab.apply(full_text)
         duration = len(audio_f32) / 16000
         logger.info(
             "Transcribed %.1fs audio in %.2fs (%.1fx realtime)",

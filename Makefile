@@ -29,7 +29,7 @@ WHISPER_MODELS_DIR := $(HOME)/.whisper/models
 HF_ORG := OpenVINO
 
 .PHONY: help install install-python install-system install-whisper-cpp \
-        install-services install-permissions install-models enable start \
+        install-services install-permissions install-models install-vocab enable start \
         stop restart status logs logs-server logs-cpp logs-ptt \
         test uninstall clean \
         extension extension-install extension-uninstall extension-enable \
@@ -61,7 +61,7 @@ help: ## Show available targets
 # Full install
 # ----------------------------------------------------------------------------
 
-install: install-system install-python install-whisper-cpp install-permissions install-models install-services extension-install enable start ## Install everything
+install: install-system install-python install-whisper-cpp install-permissions install-models install-vocab install-services extension-install enable start ## Install everything
 
 # ----------------------------------------------------------------------------
 # Python dependencies
@@ -204,6 +204,13 @@ install-models: ## Download default OpenVINO model and GGML model for whisper-cp
 		curl -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$(WHISPER_CPP_MODEL)" \
 			-o "$(WHISPER_CPP_MODELS_DIR)/$(WHISPER_CPP_MODEL)"; \
 	fi
+
+# ----------------------------------------------------------------------------
+# Vocabulary
+# ----------------------------------------------------------------------------
+
+install-vocab: ## Install default vocabulary.json when the user has none
+	@$(PYTHON) -c 'import vocab; print("Installed default vocabulary at", vocab.default_path()) if vocab.install_default() else print("Vocabulary already present at", vocab.default_path(), "(left unchanged)")'
 
 # ----------------------------------------------------------------------------
 # Systemd services

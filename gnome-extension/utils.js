@@ -404,3 +404,26 @@ export async function writeServiceOverride (serviceName, envVars) {
 
   await execCommand(['systemctl', '--user', 'daemon-reload'])
 }
+
+export function openVocabEditor (extPath) {
+  const home = GLib.get_home_dir()
+  const candidates = []
+  if (extPath)
+    candidates.push(GLib.build_filenamev([extPath, '..', 'vocab-editor.py']))
+  candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'whisper-npu-server', 'vocab-editor.py']))
+  candidates.push(GLib.build_filenamev([home, 'src', 'whisper-npu-server', 'vocab-editor.py']))
+
+  for (const path of candidates) {
+    if (!GLib.file_test(path, GLib.FileTest.EXISTS))
+      continue
+    try {
+      GLib.spawn_command_line_async('python3 ' + GLib.shell_quote(path))
+      return true
+    } catch (e) {
+      logDebug(`Vocabulary editor failed: ${e.message}`)
+      return false
+    }
+  }
+  logDebug('Vocabulary editor not found')
+  return false
+}
