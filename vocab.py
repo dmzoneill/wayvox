@@ -3,13 +3,16 @@
 Terms bias the decoder through initial_prompt and hotwords when the
 backend accepts them. The first transcription tries both. GenAI 2025.4's
 static NPU pipeline rejects the arguments. GenAI 2026.4 accepts them.
-The NPU plugin then compiles Whisper with whisper_max_prompt_size = 4
-(llm_compiled_model.hpp). That path ignores NPUW_LLM_MAX_PROMPT_LEN.
-MAX_PROMPT_LEN is also rejected by the encoder compile. English-only
-prefill spends 3 of the 4 tokens on prev_sot, start-of-transcript, and
-no-timestamps, so one content token fits and "pull request" (two tokens)
-does not. Either failure drops the arguments for the rest of the process.
-WHISPER_DEVICE=GPU sends the full list. Replacement rules still fix
+
+The normal NPU Whisper compile sets whisper_max_prompt_size to 4.
+English-only prefill spends 3 of those tokens, so "pull request" does not
+fit. word_timestamps=True on the WhisperPipeline constructor compiles a
+447 token slot instead. make install persists that as
+WHISPER_NPU_WORD_TIMESTAMPS=1 and stores the compiled model under
+WHISPER_CACHE_DIR (default ~/.cache/whisper-npu). Set the flag to 0 to
+keep the 4 token compile. Do not set MAX_PROMPT_LEN. The encoder rejects
+that name. A rejection still drops the arguments for this process.
+WHISPER_DEVICE=GPU also sends the full list. Replacement rules still fix
 mishears the model emits, such as "polar quest" -> "pull request".
 
 The editable file is ~/.config/whisper-npu/vocabulary.json. make install
@@ -235,6 +238,32 @@ _failover_reasons = []
 _backend_device = ""
 _pipeline_mode = ""
 _bias_confirmed = False
+_compiled_word_timestamps = False
+
+_FALSE_ENV = frozenset({"0", "false", "no", "off"})
+
+
+def npu_prompt_slot_enabled():
+    """True when NPU should compile with word_timestamps (447 token slot).
+
+    The installer writes WHISPER_NPU_WORD_TIMESTAMPS=1. Unset means the
+    same default, so a hand-started server matches an installed one.
+    """
+    raw = os.environ.get("WHISPER_NPU_WORD_TIMESTAMPS")
+    if raw is None or not str(raw).strip():
+        return True
+    return str(raw).strip().lower() not in _FALSE_ENV
+
+
+def whisper_cache_dir():
+    """Directory for the compiled NPU model. Empty env disables the cache."""
+    raw = os.environ.get("WHISPER_CACHE_DIR")
+    if raw is None:
+        return os.path.expanduser("~/.cache/whisper-npu")
+    raw = str(raw).strip()
+    if not raw:
+        return None
+    return os.path.expanduser(raw)
 
 
 def default_path():
@@ -541,11 +570,15 @@ def configure_backend(device):
     _backend_device = str(device or "")
     if not _backend_device.upper().startswith("NPU"):
         return
+    wide = npu_prompt_slot_enabled()
     log.info(
         "NPU Whisper will try initial_prompt and hotwords on the first transcription. "
-        "If this OpenVINO build rejects them, or the 4 token prompt slot is too small, "
-        "the server fails over to regex replacements and logs the upgrade step. "
-        "Vocabulary file: %s",
+        "WHISPER_NPU_WORD_TIMESTAMPS=%s. "
+        "1 compiles word_timestamps=True into WhisperPipeline so the prompt slot is 447. "
+        "0 keeps the 4 token slot and fails a term list over to regex. "
+        "Compiled models stay in %s. Vocabulary file: %s",
+        "1" if wide else "0",
+        whisper_cache_dir() or "(disabled)",
         default_path(),
     )
 
@@ -570,35 +603,93 @@ def _option_rejected(exc, name):
     )
 
 
-def load_whisper_pipeline(factory, model_path, device):
-    """Open WhisperPipeline. On NPU, ask for the stateful pipeline first.
+_LOAD_OPTIONS = ("word_timestamps", "STATIC_PIPELINE", "CACHE_DIR")
 
-    GenAI 2026.4 defaults NPU to stateful. GenAI 2025.4 defaults to static,
-    which rejects initial_prompt, but accepts STATIC_PIPELINE=False.
-    A binding that does not know that option falls back to the default
-    pipeline. Other load errors propagate.
-    """
-    global _pipeline_mode
+
+def _pipeline_kwargs(device):
+    """Constructor options. NPU adds the wide prompt slot and a persistent cache."""
     npu = str(device or "").upper().startswith("NPU")
     kwargs = {"device": device}
+    cache = whisper_cache_dir()
+    if cache:
+        try:
+            os.makedirs(cache, exist_ok=True)
+        except OSError as exc:
+            log.warning(
+                "Failover: could not create Whisper cache %s (%s). "
+                "Compiling without CACHE_DIR. The next start will compile again. "
+                "Action: make the directory writable, or set WHISPER_CACHE_DIR to one that is, "
+                "then restart whisper-server.",
+                cache,
+                exc,
+            )
+        else:
+            kwargs["CACHE_DIR"] = cache
     if npu:
         kwargs["STATIC_PIPELINE"] = False
-    try:
-        pipe = factory(str(model_path), **kwargs)
-    except Exception as exc:
-        if not (npu and _option_rejected(exc, "STATIC_PIPELINE")):
-            raise
-        _pipeline_mode = "default"
-        _log_pipeline_failover(exc)
-        return factory(str(model_path), device=device)
-    _pipeline_mode = "stateful" if npu else "default"
+        if npu_prompt_slot_enabled():
+            kwargs["word_timestamps"] = True
+    return kwargs
+
+
+def _rejected_load_option(exc, pending):
+    for name in _LOAD_OPTIONS:
+        if name in pending and _option_rejected(exc, name):
+            return name
+    return None
+
+
+def load_whisper_pipeline(factory, model_path, device):
+    """Open WhisperPipeline.
+
+    On NPU, ask for the stateful pipeline and, unless
+    WHISPER_NPU_WORD_TIMESTAMPS=0, compile with word_timestamps=True.
+    That constructor flag is what raises the NPU prompt slot from 4 to 447.
+    CACHE_DIR keeps the compiled blob so the next start does not rebuild it.
+    A binding that rejects one of those options is retried without it.
+    Other load errors propagate.
+    """
+    global _pipeline_mode, _compiled_word_timestamps
+    npu = str(device or "").upper().startswith("NPU")
+    kwargs = _pipeline_kwargs(device)
+    while True:
+        try:
+            pipe = factory(str(model_path), **kwargs)
+        except Exception as exc:
+            dropped = _rejected_load_option(exc, kwargs)
+            if not dropped:
+                raise
+            kwargs.pop(dropped, None)
+            if dropped == "STATIC_PIPELINE":
+                _log_pipeline_failover(exc)
+            elif dropped == "word_timestamps":
+                _log_word_timestamps_failover(exc)
+            else:
+                _log_cache_failover(exc)
+            continue
+        break
+    _compiled_word_timestamps = bool(kwargs.get("word_timestamps"))
+    _pipeline_mode = "stateful" if npu and "STATIC_PIPELINE" in kwargs else "default"
     if npu:
-        log.info(
-            "NPU Whisper pipeline is stateful (STATIC_PIPELINE=False). "
-            "OpenVINO GenAI %s. Decoder bias is tried on the first transcription. "
-            "A 4 token prompt slot fails over to regex. The failover log names what to upgrade.",
-            _installed_genai_version(),
-        )
+        if _compiled_word_timestamps:
+            log.info(
+                "NPU Whisper pipeline is stateful and compiled with word_timestamps=True. "
+                "Prompt slot is 447 tokens, so initial_prompt and hotwords are sent. "
+                "OpenVINO GenAI %s. Compiled model cache: %s. "
+                "The first start after enabling this compiles for a few minutes. Later starts reuse the cache. "
+                "Set WHISPER_NPU_WORD_TIMESTAMPS=0 and restart whisper-server to go back to the 4 token slot.",
+                _installed_genai_version(),
+                kwargs.get("CACHE_DIR") or "(disabled)",
+            )
+        else:
+            log.info(
+                "NPU Whisper pipeline is %s. word_timestamps is off, so the prompt slot stays 4 tokens. "
+                "A term list fails over to regex. OpenVINO GenAI %s. "
+                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart whisper-server. "
+                "make install writes that default.",
+                _pipeline_mode,
+                _installed_genai_version(),
+            )
     return pipe
 
 
@@ -623,6 +714,40 @@ def _log_pipeline_failover(exc):
         _one_line(exc),
         default_path(),
         _installed_genai_version(),
+    )
+
+
+def _log_named_load_failover(reason, signature, message):
+    if reason not in _failover_reasons:
+        _failover_reasons.append(reason)
+    if signature in _failover_logged:
+        return
+    _failover_logged.add(signature)
+    log.warning(message)
+
+
+def _log_word_timestamps_failover(exc):
+    _log_named_load_failover(
+        "word_timestamps",
+        ("pipeline", ("word_timestamps",)),
+        "Failover: WhisperPipeline rejected word_timestamps (%s). "
+        "The NPU prompt slot stays 4 tokens, so a term list will not fit. "
+        "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, "
+        "then restart whisper-server. Set WHISPER_NPU_WORD_TIMESTAMPS=0 to skip this compile option. "
+        "Regex replacements in %s still apply. Installed openvino-genai is %s."
+        % (_one_line(exc), default_path(), _installed_genai_version()),
+    )
+
+
+def _log_cache_failover(exc):
+    _log_named_load_failover(
+        "cache_dir",
+        ("pipeline", ("CACHE_DIR",)),
+        "Failover: WhisperPipeline rejected CACHE_DIR (%s). "
+        "Loaded without a compiled-model cache, so the next start compiles again. "
+        "Action: unset WHISPER_CACHE_DIR or point it at a writable directory, then restart whisper-server. "
+        "Installed openvino-genai is %s."
+        % (_one_line(exc), _installed_genai_version()),
     )
 
 
@@ -666,21 +791,32 @@ def _log_failover(reason, dropped, exc):
     path = default_path()
     npu = "npu" in str(exc).lower() or _backend_device.upper().startswith("NPU")
     if reason == "prompt_slot":
+        if _compiled_word_timestamps:
+            action = (
+                "word_timestamps=True was compiled and the slot is still 4 tokens. "
+                "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
+                "Set WHISPER_DEVICE=GPU and restart whisper-server to send the full term list. "
+                "This OpenVINO build did not raise whisper_max_prompt_size. "
+            )
+        else:
+            action = (
+                "word_timestamps was not compiled, so the slot stayed 4 tokens. "
+                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart whisper-server. "
+                "make install writes that into the user service. "
+                "The flag passes word_timestamps=True to the WhisperPipeline constructor and compiles a 447 token slot. "
+                "Do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
+            )
         log.warning(
             "Failover: NPU Whisper prompt slot is 4 tokens, shorter than %s. "
             "Error: %s. Dropped %s for the rest of this process so the next utterance skips the failed inference. "
             "Regex replacements in %s still correct misheard terms. "
-            "The slot is the OpenVINO NPU constant whisper_max_prompt_size. Whisper ignores NPUW_LLM_MAX_PROMPT_LEN. "
-            "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name, and the whisper compiler does not read it. "
-            "English-only prefill uses prev_sot, start-of-transcript, and no-timestamps, so one content token fits. "
-            "pull request is two tokens. "
-            "Set WHISPER_DEVICE=GPU and restart whisper-server to send the full term list. "
-            "An OpenVINO build that raises whisper_max_prompt_size is what makes that list fit on NPU. "
+            "%s"
             "Installed openvino-genai is %s. Until then, add a replacement rule for any term the model still mishears.",
             keys,
             _one_line(exc),
             keys,
             path,
+            action,
             version,
         )
         return
@@ -762,6 +898,7 @@ def bias_status():
         mode = "on"
     else:
         mode = "pending"
+    npu = _backend_device.upper().startswith("NPU")
     return {
         "mode": mode,
         "active": active,
@@ -769,6 +906,9 @@ def bias_status():
         "pipeline": _pipeline_mode or "unloaded",
         "device": _backend_device,
         "failover": list(_failover_reasons),
+        "word_timestamps": _compiled_word_timestamps,
+        "word_timestamps_requested": bool(npu and npu_prompt_slot_enabled()),
+        "cache_dir": whisper_cache_dir() or "",
     }
 
 

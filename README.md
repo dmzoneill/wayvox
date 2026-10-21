@@ -240,7 +240,7 @@ python3 push-to-talk.py --key KEY_RIGHTCTRL --backend openvino --stream-interval
 
 Whisper often hears computer terms as everyday words (`polar quest` instead of `pull request`). Two fixes run on every transcription:
 
-1. **Bias.** A term list is sent as the Whisper `initial_prompt` and as `hotwords`. CPU, GPU, and faster-whisper accept both. On NPU the first transcription tries them. GenAI 2025.4's static pipeline rejects the arguments. GenAI 2026.4 accepts them, then fails because the NPU plugin hardcodes `whisper_max_prompt_size` to 4 and ignores `NPUW_LLM_MAX_PROMPT_LEN`. Do not set `MAX_PROMPT_LEN`. The encoder rejects that name. English-only audio has room for one content token. `pull request` is two, so it does not fit. `WHISPER_DEVICE=GPU` sends the full list. A rejection drops the arguments for the rest of the process. The journal line starts with `Failover:`. `GET /health` reports `bias.mode` as `pending`, `on`, `partial`, or `regex`.
+1. **Bias.** A term list is sent as the Whisper `initial_prompt` and as `hotwords`. CPU, GPU, and faster-whisper accept both. On NPU the pipeline is compiled with `word_timestamps=True`, which raises the prompt slot from 4 tokens to 447 so the term list fits. `make install` writes `WHISPER_NPU_WORD_TIMESTAMPS=1` and `WHISPER_CACHE_DIR=~/.cache/whisper-npu` into the user service. The first start after that compiles for a few minutes. Later starts reuse the cache. Set `WHISPER_NPU_WORD_TIMESTAMPS=0` to keep the 4 token slot. Do not set `MAX_PROMPT_LEN`. The encoder rejects that name. GenAI 2025.4's static pipeline still rejects the bias arguments. A rejection drops them for the rest of the process. The journal line starts with `Failover:`. `GET /health` reports `bias.mode` as `pending`, `on`, `partial`, or `regex`, plus `word_timestamps`.
 2. **Replacements.** Python regular expressions rewrite leftovers the model still gets wrong. These run on every device, including after a bias failover.
 
 Built-in lists cover git, GitHub, Kubernetes, containers, databases, web APIs, languages, and Linux commands. `make install` copies `share/vocabulary.json` to `~/.config/whisper-npu/vocabulary.json` when that file is absent. A later install leaves an existing file alone. Edit it from the tray: **Edit Vocabulary...** in the GNOME menu, the GNOME preferences window, or the KDE popup. That opens `vocab-editor.py`. The server reloads the file on the next transcription. No restart.
@@ -327,6 +327,8 @@ make install WHISPER_DEVICE=CPU WHISPER_MODEL=whisper-base.en
 | `WHISPER_MODEL` | `whisper-small.en-fp16-ov` | Default model for server-native |
 | `WHISPER_CPP_DEVICE` | `NPU` | OpenVINO encoder device for whisper.cpp |
 | `WHISPER_CPP_PORT` | `5001` | Port for whisper.cpp server |
+| `WHISPER_NPU_WORD_TIMESTAMPS` | `1` | Compile NPU Whisper with `word_timestamps` so the prompt slot is 447. `0` keeps 4 tokens |
+| `WHISPER_CACHE_DIR` | `~/.cache/whisper-npu` | Persistent compiled-model cache |
 
 ## Models
 
@@ -395,7 +397,7 @@ curl http://127.0.0.2:5000/models
 | aiohttp | >= 3.9.0 | push-to-talk.py |
 | evdev | >= 1.9.0 | push-to-talk.py |
 
-OpenVINO GenAI 2026.4.1 is what `make install` pulls. Older GenAI still dictates: the server asks NPU for `STATIC_PIPELINE=False`, and if that option is missing it loads the default pipeline and logs the upgrade command. GenAI 2025.4's static pipeline rejects `initial_prompt` and `hotwords`. The server retries without them and logs that too. GenAI 2026.4 accepts the arguments, but the NPU plugin hardcodes `whisper_max_prompt_size` to 4 in `llm_compiled_model.hpp` and does not read `NPUW_LLM_MAX_PROMPT_LEN`. `MAX_PROMPT_LEN` cannot raise it either: the encoder compile rejects that name. That overflow fails over to the regex replacements. `WHISPER_DEVICE=GPU` is the path that sends the full term list today. Restart `whisper-server` after changing the device.
+OpenVINO GenAI 2026.4.1 is what `make install` pulls. The installer also sets `WHISPER_NPU_WORD_TIMESTAMPS=1`. That passes `word_timestamps=True` to the `WhisperPipeline` constructor, and the NPU compile then uses a 447 token prompt slot instead of 4. The compiled model is cached in `WHISPER_CACHE_DIR` (`~/.cache/whisper-npu` by default), so a restart does not compile it again. Older GenAI still dictates: the server asks NPU for `STATIC_PIPELINE=False`, and if that option is missing it loads the default pipeline and logs the upgrade command. GenAI 2025.4's static pipeline rejects `initial_prompt` and `hotwords`. The server retries without them and logs that too. Do not set `MAX_PROMPT_LEN`. The encoder compile rejects that name. If the wide slot is off or the device still rejects the prompt, regex replacements remain. `WHISPER_DEVICE=GPU` also sends the full term list. Restart `whisper-server` after changing the device or the flag.
 
 ### System
 

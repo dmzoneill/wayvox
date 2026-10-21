@@ -207,6 +207,8 @@ def test_prompt_slot_log_names_max_prompt_len(vocab_path, monkeypatch, caplog):
 
 
 def test_load_whisper_pipeline_falls_back_when_static_flag_rejected(monkeypatch, caplog):
+    monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "1")
+    monkeypatch.setenv("WHISPER_CACHE_DIR", "/tmp/whisper-npu-test-cache")
     monkeypatch.setattr(vocab, "_failover_logged", set())
     monkeypatch.setattr(vocab, "_failover_reasons", [])
     calls = []
@@ -219,9 +221,14 @@ def test_load_whisper_pipeline_falls_back_when_static_flag_rejected(monkeypatch,
 
     with caplog.at_level(logging.WARNING, logger="vocab"):
         assert vocab.load_whisper_pipeline(factory, "/m", "NPU") == "pipe"
+    wide = {
+        "device": "NPU",
+        "word_timestamps": True,
+        "CACHE_DIR": "/tmp/whisper-npu-test-cache",
+    }
     assert calls == [
-        {"device": "NPU", "STATIC_PIPELINE": False},
-        {"device": "NPU"},
+        {**wide, "STATIC_PIPELINE": False},
+        wide,
     ]
     assert "Failover:" in caplog.text
     assert "2026.4.1" in caplog.text
@@ -256,6 +263,46 @@ def test_load_whisper_pipeline_reraises_unrelated():
 
     with pytest.raises(RuntimeError, match="npu missing"):
         vocab.load_whisper_pipeline(factory, "/m", "NPU")
+
+
+def test_load_skips_word_timestamps_when_disabled(monkeypatch):
+    monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "0")
+    monkeypatch.setenv("WHISPER_CACHE_DIR", "")
+
+    def factory(path, **kwargs):
+        assert "word_timestamps" not in kwargs
+        assert "CACHE_DIR" not in kwargs
+        assert kwargs["STATIC_PIPELINE"] is False
+        return "pipe"
+
+    assert vocab.load_whisper_pipeline(factory, "/m", "NPU") == "pipe"
+    status = vocab.bias_status()
+    assert status["word_timestamps"] is False
+    assert status["word_timestamps_requested"] is False
+    assert status["pipeline"] == "stateful"
+
+
+def test_load_drops_word_timestamps_when_rejected(monkeypatch, caplog):
+    monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "1")
+    monkeypatch.setenv("WHISPER_CACHE_DIR", "")
+    monkeypatch.setattr(vocab, "_failover_logged", set())
+    monkeypatch.setattr(vocab, "_failover_reasons", [])
+    calls = []
+
+    def factory(path, **kwargs):
+        calls.append(set(kwargs))
+        if kwargs.get("word_timestamps"):
+            raise TypeError("unexpected keyword argument 'word_timestamps'")
+        return "pipe"
+
+    with caplog.at_level(logging.WARNING, logger="vocab"):
+        assert vocab.load_whisper_pipeline(factory, "/m", "NPU") == "pipe"
+    assert "word_timestamps" not in calls[-1]
+    assert "STATIC_PIPELINE" in calls[-1]
+    assert vocab.bias_status()["word_timestamps"] is False
+    assert vocab.bias_status()["failover"] == ["word_timestamps"]
+    assert "Failover:" in caplog.text
+    assert "2026.4.1" in caplog.text
 
 
 def test_generate_biased_retries_when_npu_prompt_slot_is_short(vocab_path, monkeypatch):

@@ -184,9 +184,8 @@ class ModelManager:
                 raise FileNotFoundError(f"Model {model_name} not found at {model_path}")
             logger.info(f"Loading {model_name} on {DEVICE} (OpenVINO)")
             # Stateful on NPU so GenAI 2025.4 does not stay on the static
-            # pipeline. A binding that rejects STATIC_PIPELINE falls back.
-            # Decoder bias is tried later and dropped, with a log, if this
-            # build rejects it or the 4 token slot is too small.
+            # pipeline. word_timestamps=True (WHISPER_NPU_WORD_TIMESTAMPS=1)
+            # compiles the 447 token prompt slot. CACHE_DIR keeps that blob.
             self.pipelines[model_name] = vocab.load_whisper_pipeline(
                 _openvino_genai.WhisperPipeline, model_path, DEVICE
             )

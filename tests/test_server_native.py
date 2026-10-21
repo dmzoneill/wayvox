@@ -221,6 +221,8 @@ class TestModelManager:
         assert model_mgr.list_models() == []
 
     def test_load_model_cache_miss(self, model_mgr, monkeypatch):
+        monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "1")
+        monkeypatch.setenv("WHISPER_CACHE_DIR", "/tmp/whisper-npu-test-cache")
         monkeypatch.setattr(server_mod, "ENGINE", "openvino")
         monkeypatch.setattr(server_mod, "DEVICE", "NPU")
         monkeypatch.setattr(server_mod, "_openvino_genai", _mock_ov)
@@ -228,7 +230,11 @@ class TestModelManager:
         os.makedirs(model_dir, exist_ok=True)
         model_mgr.load_model("whisper-small-en")
         _mock_ov.WhisperPipeline.assert_called_once_with(
-            model_dir, device="NPU", STATIC_PIPELINE=False
+            model_dir,
+            device="NPU",
+            STATIC_PIPELINE=False,
+            word_timestamps=True,
+            CACHE_DIR="/tmp/whisper-npu-test-cache",
         )
         assert "whisper-small-en" in model_mgr.pipelines
 

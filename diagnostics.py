@@ -297,13 +297,24 @@ def bias_action(bias):
             "GenAI 2026.4 accepts them. Regex replacements still correct misheard terms."
         )
     if "prompt_slot" in reasons:
+        if bias.get("word_timestamps"):
+            slot = (
+                "word_timestamps=True was compiled and the slot is still 4 tokens. "
+                "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
+                "Set WHISPER_DEVICE=GPU and restart whisper-server to send the full term list. "
+            )
+        else:
+            slot = (
+                "word_timestamps was not compiled, so the slot stayed 4 tokens. "
+                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart whisper-server. "
+                "make install writes that into the user service. "
+                "The flag passes word_timestamps=True to the WhisperPipeline constructor and compiles a 447 token slot. "
+                "Do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
+            )
         notes.append(
             "Failover: NPU Whisper prompt slot is 4 tokens, so a technical term list does not fit. "
             "initial_prompt and hotwords were dropped for this process. Regex replacements still run. "
-            "The slot is the OpenVINO constant whisper_max_prompt_size. Whisper ignores NPUW_LLM_MAX_PROMPT_LEN. "
-            "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
-            "Set WHISPER_DEVICE=GPU and restart whisper-server to send the full term list. "
-            "An OpenVINO build that raises whisper_max_prompt_size is what makes that list fit on NPU. "
+            + slot +
             "Until then, add a replacement rule for any term the model still mishears."
         )
     if notes:
@@ -428,6 +439,19 @@ def format_report(report):
         lines.append(f"  Bias active: {active}")
         lines.append(f"  Bias rejected: {rejected}")
         lines.append(f"  Pipeline: {bias.get('pipeline', 'unknown')}")
+        if str(bias.get("device") or "").upper().startswith("NPU") or bias.get("word_timestamps") is not None:
+            if bias.get("word_timestamps"):
+                compile_state = "word_timestamps compiled, 447 token slot"
+            elif bias.get("word_timestamps_requested"):
+                compile_state = "word_timestamps enabled, compiles on first model load"
+            elif str(bias.get("device") or "").upper().startswith("NPU"):
+                compile_state = "off, 4 token slot. Set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart whisper-server"
+            else:
+                compile_state = ""
+            if compile_state:
+                lines.append(f"  NPU prompt compile: {compile_state}")
+        if bias.get("cache_dir"):
+            lines.append(f"  Whisper cache: {bias['cache_dir']}")
         vocab_info = runtime.get("vocab") or {}
         if vocab_info:
             lines.append(

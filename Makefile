@@ -9,6 +9,10 @@ WHISPER_MODEL      ?= whisper-small.en-fp16-ov
 WHISPER_CT2_MODEL  ?= small.en
 WHISPER_CPP_PORT   ?= 5001
 WHISPER_CPP_DEVICE ?= NPU
+# 1 compiles NPU Whisper with word_timestamps so the prompt slot is 447.
+# 0 keeps the 4 token slot. The compiled blob is reused from the cache dir.
+WHISPER_NPU_WORD_TIMESTAMPS ?= 1
+WHISPER_CACHE_DIR ?= $(HOME)/.cache/whisper-npu
 
 SYSTEM_PKGS := ydotool pipewire-pulseaudio pipewire-utils pulseaudio-utils \
                wtype wl-clipboard xdotool \
@@ -56,6 +60,8 @@ help: ## Show available targets
 	@echo "  WHISPER_CT2_MODEL    faster-whisper model name   [$(WHISPER_CT2_MODEL)]"
 	@echo "  WHISPER_CPP_DEVICE   Device for whisper.cpp      [$(WHISPER_CPP_DEVICE)]"
 	@echo "  WHISPER_CPP_PORT     Port for whisper.cpp        [$(WHISPER_CPP_PORT)]"
+	@echo "  WHISPER_NPU_WORD_TIMESTAMPS  1 compiles a 447 token NPU slot [$(WHISPER_NPU_WORD_TIMESTAMPS)]"
+	@echo "  WHISPER_CACHE_DIR    Compiled Whisper model cache [$(WHISPER_CACHE_DIR)]"
 
 # ----------------------------------------------------------------------------
 # Full install
@@ -235,6 +241,9 @@ $(SYSTEMD_DIR)/whisper-server.service:
 		'Environment=WHISPER_DEVICE=$(WHISPER_DEVICE)' \
 		'Environment=WHISPER_MODEL=$(WHISPER_MODEL)' \
 		'Environment=WHISPER_CT2_MODEL=$(WHISPER_CT2_MODEL)' \
+			'Environment=WHISPER_NPU_WORD_TIMESTAMPS=$(WHISPER_NPU_WORD_TIMESTAMPS)' \
+			'Environment=WHISPER_CACHE_DIR=$(WHISPER_CACHE_DIR)' \
+			'TimeoutStartSec=300' \
 		'Restart=on-failure' \
 		'RestartSec=5' \
 		'' \
