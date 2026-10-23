@@ -14,12 +14,14 @@ LEGACY_CACHE_DIR = Path(os.path.expanduser("~/.cache/whisper-npu"))
 
 
 def current_config_dir() -> Path:
+    """Return the Wayvox config directory, honoring WAYVOX_CONFIG_DIR."""
     return Path(
         os.path.expanduser(os.environ.get("WAYVOX_CONFIG_DIR", "~/.config/wayvox")),
     )
 
 
 def legacy_config_dir() -> Path:
+    """Return the previous release's config directory."""
     return Path(os.path.expanduser("~/.config/whisper-npu"))
 
 
@@ -33,14 +35,17 @@ def config_file(name: str) -> Path:
 
 
 def history_file() -> Path:
+    """Return the dictation history database path."""
     return config_file("history.db")
 
 
 def vocabulary_file() -> Path:
+    """Return the vocabulary.json path, including a legacy fallback."""
     return config_file("vocabulary.json")
 
 
 def app_contexts_file() -> Path:
+    """Return the app-contexts.json path, including a legacy fallback."""
     return config_file("app-contexts.json")
 
 

@@ -16,7 +16,7 @@ function getYdotoolSocket() {
     GLib.get_user_runtime_dir(),
     ".ydotool_socket",
   ]);
-  if (GLib.file_test(runtimeSocket, GLib.FileTest.EXISTS)) return runtimeSocket; // codespell:ignore
+  if (GLib.file_test(runtimeSocket, GLib.FileTest.EXISTS)) return runtimeSocket;
 
   return "/tmp/.ydotool_socket";
 }
@@ -279,7 +279,7 @@ export async function downloadModel(org, modelName, cancellable = null) {
 
   const modelReady = GLib.file_test(
     dest,
-    GLib.FileTest.IS_DIR, // codespell:ignore
+    GLib.FileTest.IS_DIR,
   );
   if (modelReady) {
     throw new Error(`Model ${modelName} already exists`);
@@ -325,7 +325,7 @@ export async function downloadLlmModel(org, modelName, cancellable = null) {
 
   const modelReady = GLib.file_test(
     dest,
-    GLib.FileTest.IS_DIR, // codespell:ignore
+    GLib.FileTest.IS_DIR,
   );
   if (modelReady) {
     throw new Error(`LLM model ${modelName} already exists`);
@@ -423,7 +423,7 @@ export async function writePttServiceOverride(envVars, pttArgs) {
   ]);
   const srcDirReady = GLib.file_test(
     srcDir,
-    GLib.FileTest.IS_DIR, // codespell:ignore
+    GLib.FileTest.IS_DIR,
   );
   if (!srcDirReady)
     srcDir = GLib.build_filenamev([
@@ -434,7 +434,7 @@ export async function writePttServiceOverride(envVars, pttArgs) {
     ]);
   const argsStr = pttArgs.map((a) => `"${a}"`).join(" ");
   content += `ExecStart=\n`;
-  content += `ExecStart=/usr/bin/python3 ${srcDir}/push-to-talk.py ${argsStr}\n`;
+  content += `ExecStart=/usr/bin/python3 ${srcDir}/push_to_talk.py ${argsStr}\n`;
 
   const file = Gio.file_new_for_path(overridePath);
   file.replace_contents(
@@ -516,9 +516,9 @@ export function openVocabEditor(extPath) {
   const home = GLib.get_home_dir();
   const candidates = [];
   if (extPath)
-    candidates.push(GLib.build_filenamev([extPath, "..", "vocab-editor.py"]));
+    candidates.push(GLib.build_filenamev([extPath, "..", "vocab_editor.py"]));
   candidates.push(
-    GLib.build_filenamev([home, "src", "usr", "wayvox", "vocab-editor.py"]),
+    GLib.build_filenamev([home, "src", "usr", "wayvox", "vocab_editor.py"]),
   );
   candidates.push(
     GLib.build_filenamev([
@@ -526,7 +526,7 @@ export function openVocabEditor(extPath) {
       "src",
       "usr",
       "whisper-npu-server",
-      "vocab-editor.py",
+      "vocab_editor.py",
     ]),
   );
   candidates.push(
@@ -534,12 +534,12 @@ export function openVocabEditor(extPath) {
       home,
       "src",
       "whisper-npu-server",
-      "vocab-editor.py",
+      "vocab_editor.py",
     ]),
   );
 
   for (const path of candidates) {
-    if (!GLib.file_test(path, GLib.FileTest.EXISTS)) continue; // codespell:ignore
+    if (!GLib.file_test(path, GLib.FileTest.EXISTS)) continue;
     try {
       GLib.spawn_command_line_async("python3 " + GLib.shell_quote(path));
       return true;
@@ -578,7 +578,7 @@ export function openAbout(extPath, host, port) {
   const safePort = Number(port) || 5000;
 
   for (const path of candidates) {
-    if (!GLib.file_test(path, GLib.FileTest.EXISTS)) continue; // codespell:ignore
+    if (!GLib.file_test(path, GLib.FileTest.EXISTS)) continue;
     const cmd = [
       "python3",
       GLib.shell_quote(path),

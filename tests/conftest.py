@@ -17,6 +17,9 @@ import pytest
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _TESTS_DIR not in sys.path:
+    sys.path.insert(0, _TESTS_DIR)
 
 # Keep server tests off the user's real vocabulary file.
 os.environ.setdefault(
@@ -55,7 +58,7 @@ def make_wav_bytes(
         samples = _sine_samples(n, 16000, sample_rate)
 
     buf = io.BytesIO()
-    with wave.open(buf, "wb") as wf:
+    with wave.Wave_write(buf) as wf:
         wf.setnchannels(channels)
         wf.setsampwidth(sample_width)
         wf.setframerate(sample_rate)
@@ -80,16 +83,19 @@ def make_silent_raw(duration_s=1.0, sample_rate=16000):
 
 @pytest.fixture
 def wav_bytes():
+    """Return a one-second in-memory WAV fixture."""
     return make_wav_bytes(duration_s=1.0)
 
 
 @pytest.fixture
 def raw_audio():
+    """Return one second of raw 16-bit audio."""
     return make_raw_audio(duration_s=1.0)
 
 
 @pytest.fixture
 def silent_raw():
+    """Return one second of silent raw PCM."""
     return make_silent_raw(duration_s=1.0)
 
 

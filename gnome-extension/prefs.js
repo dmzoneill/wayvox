@@ -177,7 +177,7 @@ export default class WhisperNpuPreferences extends ExtensionPreferences {
     button.connect("clicked", () => {
       if (!openVocabEditor(this.path))
         row.set_subtitle(
-          "Editor not found. Expected vocab-editor.py in the Wayvox checkout.",
+          "Editor not found. Expected vocab_editor.py in the Wayvox checkout.",
         );
     });
     group.add(row);

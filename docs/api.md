@@ -69,7 +69,7 @@ The optional `wayvox-cpp-server.service` exposes:
 Run it manually when needed:
 
 ```bash
-python3 server-whisper-cpp.py \
+python3 server_whisper_cpp.py \
   --port 5001 \
   --model ~/.cache/whisper/ggml-base.bin \
   --device NPU

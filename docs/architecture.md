@@ -6,9 +6,9 @@ Wayvox is an on-device Linux dictation stack. Audio stays local while Whisper ru
 
 ```mermaid
 graph TB
-    PTT[wayvox-push-to-talk.service<br/>push-to-talk.py]
-    API[wayvox-server.service<br/>server-native.py :5000]
-    CPP[wayvox-cpp-server.service<br/>server-whisper-cpp.py :5001]
+    PTT[wayvox-push-to-talk.service<br/>push_to_talk.py]
+    API[wayvox-server.service<br/>server_native.py :5000]
+    CPP[wayvox-cpp-server.service<br/>server_whisper_cpp.py :5001]
     OV[OpenVINO GenAI<br/>WhisperPipeline]
     WC[libwhisper.so<br/>whisper.cpp]
     NPU[Intel NPU]
@@ -33,9 +33,9 @@ graph TB
 
 | Component               | Role                                                       | Default port |
 | ----------------------- | ---------------------------------------------------------- | ------------ |
-| `server-native.py`      | Full Whisper pipeline through OpenVINO                     | `5000`       |
-| `server-whisper-cpp.py` | Whisper.cpp with NPU encoder and CPU decoder               | `5001`       |
-| `push-to-talk.py`       | Keyboard, audio capture, transcription, and text injection | N/A          |
+| `server_native.py`      | Full Whisper pipeline through OpenVINO                     | `5000`       |
+| `server_whisper_cpp.py` | Whisper.cpp with NPU encoder and CPU decoder               | `5001`       |
+| `push_to_talk.py`       | Keyboard, audio capture, transcription, and text injection | N/A          |
 | GNOME extension         | Tray controls, settings, vocabulary, and About view        | N/A          |
 | KDE plasmoid            | Plasma controls and Language Buddy overlay                 | N/A          |
 

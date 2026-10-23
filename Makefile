@@ -250,7 +250,7 @@ $(SYSTEMD_DIR)/wayvox-server.service:
 		'[Service]' \
 		'Type=simple' \
 		'WorkingDirectory=$(WAYVOX_RUNTIME_DIR)' \
-		'ExecStart=$(PYTHON) $(WAYVOX_RUNTIME_DIR)/server-native.py' \
+		'ExecStart=$(PYTHON) $(WAYVOX_RUNTIME_DIR)/server_native.py' \
 		'Environment=WHISPER_DEVICE=$(WHISPER_DEVICE)' \
 		'Environment=WHISPER_MODEL=$(WHISPER_MODEL)' \
 		'Environment=WHISPER_CT2_MODEL=$(WHISPER_CT2_MODEL)' \
@@ -283,7 +283,7 @@ $(SYSTEMD_DIR)/wayvox-cpp-server.service:
 		'Type=simple' \
 		"WorkingDirectory=$(WAYVOX_RUNTIME_DIR)" \
 		"Environment=LD_LIBRARY_PATH=$$LD_PATH" \
-		"ExecStart=$(PYTHON) $(WAYVOX_RUNTIME_DIR)/server-whisper-cpp.py --port $(WHISPER_CPP_PORT) --model $(WHISPER_CPP_MODELS_DIR)/$(WHISPER_CPP_MODEL) --device $$CPP_DEVICE --no-speech-thold 1.0" \
+		"ExecStart=$(PYTHON) $(WAYVOX_RUNTIME_DIR)/server_whisper_cpp.py --port $(WHISPER_CPP_PORT) --model $(WHISPER_CPP_MODELS_DIR)/$(WHISPER_CPP_MODEL) --device $$CPP_DEVICE --no-speech-thold 1.0" \
 		'Restart=on-failure' \
 		'RestartSec=5' \
 		'' \
@@ -303,7 +303,7 @@ $(SYSTEMD_DIR)/wayvox-push-to-talk.service:
 		'Environment=XDG_SESSION_TYPE=wayland' \
 		'Environment=YDOTOOL_SOCKET=/tmp/.ydotool_socket' \
 		'ExecStartPre=/bin/bash -c '"'"'i=0; while [ $$i -lt 60 ]; do curl -sf http://127.0.0.1:5000/health >/dev/null 2>&1 && exit 0; sleep 1; i=$$((i+1)); done; echo wayvox-server not ready after 60s; exit 1'"'"'' \
-		'ExecStart=/usr/bin/sg input -c '"'"'$(PYTHON) $(WAYVOX_RUNTIME_DIR)/push-to-talk.py --key KEY_RIGHTCTRL --backend openvino'"'"'' \
+		'ExecStart=/usr/bin/sg input -c '"'"'$(PYTHON) $(WAYVOX_RUNTIME_DIR)/push_to_talk.py --key KEY_RIGHTCTRL --backend openvino'"'"'' \
 		'Restart=on-failure' \
 		'RestartSec=3' \
 		'' \
@@ -341,10 +341,10 @@ stop: ## Stop all services
 restart: stop start ## Restart all services
 
 status: ## Show service status
-	@echo "=== wayvox-server (server-native.py :5000) ==="
+	@echo "=== wayvox-server (server_native.py :5000) ==="
 	@systemctl --user status wayvox-server.service --no-pager 2>/dev/null || echo "  not installed"
 	@echo ""
-	@echo "=== wayvox-cpp-server (server-whisper-cpp.py :$(WHISPER_CPP_PORT)) ==="
+	@echo "=== wayvox-cpp-server (server_whisper_cpp.py :$(WHISPER_CPP_PORT)) ==="
 	@systemctl --user status wayvox-cpp-server.service --no-pager 2>/dev/null || echo "  not installed"
 	@echo ""
 	@echo "=== wayvox-push-to-talk ==="

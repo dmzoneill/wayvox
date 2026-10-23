@@ -4,6 +4,7 @@ import json
 import logging
 
 import pytest
+
 import vocab
 
 
@@ -12,11 +13,11 @@ def _fixture_vocab_path(tmp_path, monkeypatch):
     """Vocab path."""
     path = tmp_path / "vocabulary.json"
     monkeypatch.setenv("WHISPER_VOCAB_PATH", str(path))
-    with vocab._lock:
-        vocab._state["key"] = None
+    with vocab.STATE.lock:
+        vocab.STATE.cache["key"] = None
     yield path
-    with vocab._lock:
-        vocab._state["key"] = None
+    with vocab.STATE.lock:
+        vocab.STATE.cache["key"] = None
 
 
 @pytest.mark.usefixtures("vocab_path")
@@ -80,7 +81,7 @@ def test_prompt_includes_priority_terms_and_stays_short():
 def test_custom_file_round_trip(vocab_path):
     """Test that custom file round trip."""
     rules, errors = vocab.parse_rules(r"\bfoo bar\b => baz  [cs]")
-    assert errors == []
+    assert not errors
     assert rules[0]["ignore_case"] is False
     config = {
         "enabled": True,
@@ -107,8 +108,8 @@ def test_invalid_regex_is_refused_and_skipped(vocab_path):
     with pytest.raises(ValueError):
         vocab.save(bad)
     vocab_path.write_text(json.dumps(bad))
-    with vocab._lock:
-        vocab._state["key"] = None
+    with vocab.STATE.lock:
+        vocab.STATE.cache["key"] = None
     # Broken file rule is skipped. Built-in rules are not mixed back in.
     assert vocab.apply("polar quest") == "polar quest"
 
@@ -117,8 +118,8 @@ def test_missing_file_uses_builtin_defaults(tmp_path, monkeypatch):
     """Test that missing file uses builtin defaults."""
     missing = tmp_path / "nope" / "vocabulary.json"
     monkeypatch.setenv("WHISPER_VOCAB_PATH", str(missing))
-    with vocab._lock:
-        vocab._state["key"] = None
+    with vocab.STATE.lock:
+        vocab.STATE.cache["key"] = None
     info = vocab.describe()
     assert info["using_defaults"] is True
     assert info["terms"] > 40
@@ -129,7 +130,7 @@ def test_missing_file_uses_builtin_defaults(tmp_path, monkeypatch):
 @pytest.mark.usefixtures("vocab_path")
 def test_generate_biased_drops_rejected_hotwords(monkeypatch):
     """Test that generate biased drops rejected hotwords."""
-    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    monkeypatch.setattr(vocab.STATE, "rejected_bias", set())
 
     def backend(*_args, **kwargs):
         """Backend."""
@@ -145,7 +146,7 @@ def test_generate_biased_drops_rejected_hotwords(monkeypatch):
 @pytest.mark.usefixtures("vocab_path")
 def test_generate_biased_retries_when_npu_rejects_prompt(monkeypatch):
     """Test that generate biased retries when npu rejects prompt."""
-    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    monkeypatch.setattr(vocab.STATE, "rejected_bias", set())
     calls = []
 
     def backend(*_args, **kwargs):
@@ -163,7 +164,7 @@ def test_generate_biased_retries_when_npu_rejects_prompt(monkeypatch):
     assert vocab.generate_biased(backend, language="<|en|>") == "ok"
     assert vocab.generate_biased(backend, language="<|en|>") == "ok"
     assert calls[-1] == {"language"}
-    assert vocab._rejected_bias == {"initial_prompt", "hotwords"}
+    assert vocab.STATE.rejected_bias == {"initial_prompt", "hotwords"}
 
 
 @pytest.mark.usefixtures("vocab_path")
@@ -172,12 +173,12 @@ def test_configure_backend_keeps_npu_bias_until_failover(
     caplog,
 ):
     """Test that configure backend keeps npu bias until failover."""
-    monkeypatch.setattr(vocab, "_rejected_bias", set())
-    monkeypatch.setattr(vocab, "_failover_logged", set())
-    monkeypatch.setattr(vocab, "_failover_reasons", [])
-    monkeypatch.setattr(vocab, "_bias_confirmed", False)
+    monkeypatch.setattr(vocab.STATE, "rejected_bias", set())
+    monkeypatch.setattr(vocab.STATE, "failover_logged", set())
+    monkeypatch.setattr(vocab.STATE, "failover_reasons", [])
+    monkeypatch.setattr(vocab.STATE, "bias_confirmed", False)
     vocab.configure_backend("CPU")
-    assert vocab._rejected_bias == set()
+    assert vocab.STATE.rejected_bias == set()
     with caplog.at_level(logging.INFO, logger="vocab"):
         vocab.configure_backend("NPU")
     assert "first transcription" in caplog.text
@@ -197,9 +198,9 @@ def test_configure_backend_keeps_npu_bias_until_failover(
 @pytest.mark.usefixtures("vocab_path")
 def test_npu_reject_log_names_upgrade(monkeypatch, caplog):
     """Test that npu reject log names upgrade."""
-    monkeypatch.setattr(vocab, "_rejected_bias", set())
-    monkeypatch.setattr(vocab, "_failover_logged", set())
-    monkeypatch.setattr(vocab, "_failover_reasons", [])
+    monkeypatch.setattr(vocab.STATE, "rejected_bias", set())
+    monkeypatch.setattr(vocab.STATE, "failover_logged", set())
+    monkeypatch.setattr(vocab.STATE, "failover_reasons", [])
     vocab.configure_backend("CPU")
 
     def backend(*_args, **kwargs):
@@ -226,9 +227,9 @@ def test_npu_reject_log_names_upgrade(monkeypatch, caplog):
 @pytest.mark.usefixtures("vocab_path")
 def test_prompt_slot_log_names_max_prompt_len(monkeypatch, caplog):
     """Test that prompt slot log names max prompt len."""
-    monkeypatch.setattr(vocab, "_rejected_bias", set())
-    monkeypatch.setattr(vocab, "_failover_logged", set())
-    monkeypatch.setattr(vocab, "_failover_reasons", [])
+    monkeypatch.setattr(vocab.STATE, "rejected_bias", set())
+    monkeypatch.setattr(vocab.STATE, "failover_logged", set())
+    monkeypatch.setattr(vocab.STATE, "failover_reasons", [])
     vocab.configure_backend("NPU")
 
     def backend(*_args, **kwargs):
@@ -255,11 +256,11 @@ def test_load_whisper_pipeline_falls_back_when_static_flag_rejected(
     """Test that load whisper pipeline falls back when static flag rejected."""
     monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "1")
     monkeypatch.setenv("WHISPER_CACHE_DIR", "/tmp/wayvox-test-cache")
-    monkeypatch.setattr(vocab, "_failover_logged", set())
-    monkeypatch.setattr(vocab, "_failover_reasons", [])
+    monkeypatch.setattr(vocab.STATE, "failover_logged", set())
+    monkeypatch.setattr(vocab.STATE, "failover_reasons", [])
     calls = []
 
-    def factory(path, **kwargs):
+    def factory(_path, **kwargs):
         """Factory."""
         calls.append(kwargs)
         if "STATIC_PIPELINE" in kwargs:
@@ -285,10 +286,10 @@ def test_load_whisper_pipeline_falls_back_when_static_flag_rejected(
 
 def test_load_whisper_pipeline_keeps_stateful_on_npu(monkeypatch):
     """Test that load whisper pipeline keeps stateful on npu."""
-    monkeypatch.setattr(vocab, "_failover_logged", set())
-    monkeypatch.setattr(vocab, "_failover_reasons", [])
+    monkeypatch.setattr(vocab.STATE, "failover_logged", set())
+    monkeypatch.setattr(vocab.STATE, "failover_reasons", [])
 
-    def factory(path, **kwargs):
+    def factory(_path, **kwargs):
         """Factory."""
         assert kwargs["STATIC_PIPELINE"] is False
         return "pipe"
@@ -300,7 +301,7 @@ def test_load_whisper_pipeline_keeps_stateful_on_npu(monkeypatch):
 def test_load_whisper_pipeline_cpu_skips_static_flag():
     """Test that load whisper pipeline cpu skips static flag."""
 
-    def factory(path, **kwargs):
+    def factory(_path, **kwargs):
         """Factory."""
         assert "STATIC_PIPELINE" not in kwargs
         return "pipe"
@@ -312,7 +313,7 @@ def test_load_whisper_pipeline_cpu_skips_static_flag():
 def test_load_whisper_pipeline_reraises_unrelated():
     """Test that load whisper pipeline reraises unrelated."""
 
-    def factory(path, **kwargs):
+    def factory(_path, **kwargs):
         """Factory."""
         raise RuntimeError("npu missing")
 
@@ -325,7 +326,7 @@ def test_load_skips_word_timestamps_when_disabled(monkeypatch):
     monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "0")
     monkeypatch.setenv("WHISPER_CACHE_DIR", "")
 
-    def factory(path, **kwargs):
+    def factory(_path, **kwargs):
         """Factory."""
         assert "word_timestamps" not in kwargs
         assert "CACHE_DIR" not in kwargs
@@ -343,11 +344,11 @@ def test_load_drops_word_timestamps_when_rejected(monkeypatch, caplog):
     """Test that load drops word timestamps when rejected."""
     monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "1")
     monkeypatch.setenv("WHISPER_CACHE_DIR", "")
-    monkeypatch.setattr(vocab, "_failover_logged", set())
-    monkeypatch.setattr(vocab, "_failover_reasons", [])
+    monkeypatch.setattr(vocab.STATE, "failover_logged", set())
+    monkeypatch.setattr(vocab.STATE, "failover_reasons", [])
     calls = []
 
-    def factory(path, **kwargs):
+    def factory(_path, **kwargs):
         """Factory."""
         calls.append(set(kwargs))
         if kwargs.get("word_timestamps"):
@@ -367,7 +368,7 @@ def test_load_drops_word_timestamps_when_rejected(monkeypatch, caplog):
 @pytest.mark.usefixtures("vocab_path")
 def test_generate_biased_retries_when_npu_prompt_slot_is_short(monkeypatch):
     """Test that generate biased retries when npu prompt slot is short."""
-    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    monkeypatch.setattr(vocab.STATE, "rejected_bias", set())
     calls = []
 
     def backend(*_args, **kwargs):
@@ -384,7 +385,7 @@ def test_generate_biased_retries_when_npu_prompt_slot_is_short(monkeypatch):
 @pytest.mark.usefixtures("vocab_path")
 def test_generate_biased_sends_prompt_and_hotwords(monkeypatch):
     """Test that generate biased sends prompt and hotwords."""
-    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    monkeypatch.setattr(vocab.STATE, "rejected_bias", set())
     seen = {}
 
     def backend(*_args, **kwargs):
@@ -400,7 +401,7 @@ def test_generate_biased_sends_prompt_and_hotwords(monkeypatch):
 @pytest.mark.usefixtures("vocab_path")
 def test_generate_biased_does_not_swallow_other_errors(monkeypatch):
     """Test that generate biased does not swallow other errors."""
-    monkeypatch.setattr(vocab, "_rejected_bias", set())
+    monkeypatch.setattr(vocab.STATE, "rejected_bias", set())
 
     def backend(*_args, **kwargs):
         """Backend."""
@@ -419,7 +420,8 @@ def test_parse_rules_reports_bad_lines():
 
 def test_bundled_vocab_matches_builtin_defaults():
     """Test that bundled vocab matches builtin defaults."""
-    bundled = json.loads(open(vocab.bundled_path(), encoding="utf-8").read())
+    with open(vocab.bundled_path(), encoding="utf-8") as handle:
+        bundled = json.load(handle)
     assert vocab.normalize(bundled) == vocab.default_config()
 
 
