@@ -30,6 +30,7 @@ import logging
 import os
 import re
 import threading
+from typing import Any
 
 from wayvox_paths import cache_dir, vocabulary_file
 
@@ -38,12 +39,14 @@ try:
 except ImportError:
     ovg = None
 
-_OV_ERROR = None
+_OV_ERROR: Any = None
 if ovg is not None:
     try:
-        from openvino.exceptions import OVError as _OV_ERROR
+        from openvino.exceptions import OVError as _OpenVINOError
     except ImportError:
-        _OV_ERROR = None
+        pass
+    else:
+        _OV_ERROR = _OpenVINOError
 
 log = logging.getLogger("vocab")
 

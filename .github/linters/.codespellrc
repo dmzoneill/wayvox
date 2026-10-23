@@ -1,0 +1,8 @@
+; Machine-generated dependency lock files. Super-linter passes each file to
+; codespell as an absolute path, so skip globs have to match the full path.
+; package-lock.json, go.mod, go.sum, *.log, and .git are the skips from
+; super-linter's built-in TEMPLATES/.codespellrc, which this file replaces.
+[codespell]
+check-hidden =
+skip = */Pipfile.lock,*/uv.lock,*/poetry.lock,*/package-lock.json,*/yarn.lock,*/pnpm-lock.yaml,*/Cargo.lock,*/composer.lock,*/Gemfile.lock,*/go.sum,*/go.mod,*.log,.git
+ignore-words-list = filetest

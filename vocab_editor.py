@@ -6,6 +6,7 @@ The transcription server reloads that file on the next utterance.
 """
 
 import sys
+from typing import Any
 
 import vocab
 
@@ -17,11 +18,11 @@ try:
 except (ImportError, ValueError) as exc:
     gi = None
     Gtk = None
-    _GTK_ERROR = exc
+    _GTK_ERROR: BaseException | None = exc
 else:
     _GTK_ERROR = None
 
-_EditorBase = Gtk.Application if Gtk is not None else object
+_EditorBase: Any = Gtk.Application if Gtk is not None else object
 
 
 def _editor_root():
@@ -48,7 +49,7 @@ def _scrolled_view(buf):
     return scrolled
 
 
-class Editor(_EditorBase):
+class Editor(_EditorBase):  # type: ignore[misc, valid-type]
     """GTK editor for the Wayvox technical vocabulary file."""
 
     def __init__(self):

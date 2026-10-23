@@ -53,6 +53,9 @@ except ImportError:
 log = logging.getLogger("wayvox-kde")
 logging.basicConfig(level=logging.DEBUG, format="[wayvox-kde] %(message)s")
 
+# D-Bus API names are public compatibility methods and must remain camel case.
+# pylint: disable=invalid-name
+
 CONFIG_PATH = str(config_file("settings.json"))
 DEFAULT_TONES = ["diplomatic", "professional"]
 HEADER_COLOR = "color: rgba(255, 255, 255, 153);"
@@ -250,7 +253,7 @@ def _window_from_xdotool():
         return ("", "")
 
 
-class OverlayCard(QPushButton):
+class OverlayCard(QPushButton):  # type: ignore[misc, valid-type]
     """A single tone card in a floating overlay."""
 
     def __init__(self, tone, text, ready=False, parent=None):
@@ -302,7 +305,7 @@ class OverlayCard(QPushButton):
         self.setStyleSheet(CARD_STYLE)
 
 
-class FloatingPanel(QWidget):
+class FloatingPanel(QWidget):  # type: ignore[misc, valid-type]
     """Frameless panel anchored to the bottom-right of the screen."""
 
     def __init__(self):
@@ -489,7 +492,7 @@ class HistoryOverlay(FloatingPanel):
         type_text(text)
 
 
-class RewriteWorker(QObject):
+class RewriteWorker(QObject):  # type: ignore[misc, valid-type]
     """Fetch one rewrite tone without blocking the Qt thread."""
 
     finished = pyqtSignal(str, str)

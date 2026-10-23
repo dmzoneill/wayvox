@@ -10,28 +10,30 @@ import platform
 import re
 import subprocess
 import sys
+from typing import Any
 
 try:
     from importlib.metadata import PackageNotFoundError
     from importlib.metadata import version as _package_version
 except ImportError:
-    PackageNotFoundError = ImportError
-    _package_version = None
+    PackageNotFoundError = ImportError  # type: ignore[misc, assignment]
+    _package_version = None  # type: ignore[no-redef, assignment]
 
+_OV_IMPORT_ERROR: BaseException | None = None
 try:
     import openvino as ov
 except ImportError as exc:
     ov = None
     _OV_IMPORT_ERROR = exc
-else:
-    _OV_IMPORT_ERROR = None
 
-_OV_ERROR = None
+_OV_ERROR: Any = None
 if ov is not None:
     try:
-        from openvino.exceptions import OVError as _OV_ERROR
+        from openvino.exceptions import OVError as _OpenVINOError
     except ImportError:
-        _OV_ERROR = None
+        pass
+    else:
+        _OV_ERROR = _OpenVINOError
 
 _PCI_KIND = {
     "03": "GPU",

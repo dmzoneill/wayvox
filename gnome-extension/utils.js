@@ -277,10 +277,7 @@ export function listLocalModels() {
 export async function downloadModel(org, modelName, cancellable = null) {
   const dest = GLib.build_filenamev([getModelsDir(), modelName]);
 
-  const modelReady = GLib.file_test(
-    dest,
-    GLib.FileTest.IS_DIR,
-  );
+  const modelReady = GLib.file_test(dest, GLib.FileTest.IS_DIR);
   if (modelReady) {
     throw new Error(`Model ${modelName} already exists`);
   }
@@ -323,10 +320,7 @@ export function listLocalLlmModels() {
 export async function downloadLlmModel(org, modelName, cancellable = null) {
   const dest = GLib.build_filenamev([getLlmModelsDir(), modelName]);
 
-  const modelReady = GLib.file_test(
-    dest,
-    GLib.FileTest.IS_DIR,
-  );
+  const modelReady = GLib.file_test(dest, GLib.FileTest.IS_DIR);
   if (modelReady) {
     throw new Error(`LLM model ${modelName} already exists`);
   }
@@ -421,10 +415,7 @@ export async function writePttServiceOverride(envVars, pttArgs) {
     "usr",
     "wayvox",
   ]);
-  const srcDirReady = GLib.file_test(
-    srcDir,
-    GLib.FileTest.IS_DIR,
-  );
+  const srcDirReady = GLib.file_test(srcDir, GLib.FileTest.IS_DIR);
   if (!srcDirReady)
     srcDir = GLib.build_filenamev([
       GLib.get_home_dir(),

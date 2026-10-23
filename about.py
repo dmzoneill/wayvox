@@ -12,6 +12,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from typing import Any
 
 import diagnostics
 
@@ -26,11 +27,11 @@ except (ImportError, ValueError) as exc:
     Gdk = None
     GLib = None
     Gtk = None
-    _GTK_ERROR = exc
+    _GTK_ERROR: BaseException | None = exc
 else:
     _GTK_ERROR = None
 
-_AboutBase = Gtk.Application if Gtk is not None else object
+_AboutBase: Any = Gtk.Application if Gtk is not None else object
 
 
 def _dialog_errors():
@@ -91,7 +92,7 @@ def _padded_column():
     return box
 
 
-class About(_AboutBase):
+class About(_AboutBase):  # type: ignore[misc, valid-type]
     """GTK application that shows Wayvox hardware and library versions."""
 
     def __init__(self, report_text):
