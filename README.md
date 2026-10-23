@@ -1,10 +1,10 @@
-# Voxforge
+# Wayvox
 
-<img src="branding/voxforge-mark.svg" alt="Voxforge mark" width="120">
+<img src="branding/wayvox-mark.svg" alt="Wayvox mark" width="120">
 
 **Private voice, local power.**
 
-On-device speech-to-text and push-to-talk dictation for Linux. Voxforge runs Whisper locally through OpenVINO, Intel NPU/GPU, CUDA, or CPU backends, then types the result into the focused Wayland application.
+On-device speech-to-text and push-to-talk dictation for Linux. Wayvox runs Whisper locally through OpenVINO, Intel NPU/GPU, CUDA, or CPU backends, then types the result into the focused Wayland application.
 
 The technical runtime keeps its existing `whisper-*` service names, environment variables, config paths, and model paths for backwards compatibility.
 

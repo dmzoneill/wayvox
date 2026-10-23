@@ -3,7 +3,7 @@ SHELL := /bin/bash
 PROJECT_DIR  := $(CURDIR)
 SYSTEMD_DIR  := $(HOME)/.config/systemd/user
 PYTHON       := /usr/bin/python3
-BRAND_NAME   := Voxforge
+BRAND_NAME   := Wayvox
 
 WHISPER_DEVICE     ?= auto
 WHISPER_MODEL      ?= whisper-small.en-fp16-ov

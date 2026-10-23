@@ -1,6 +1,6 @@
 {
   "uuid": "whisper-npu@dmz.oneill",
-  "name": "Voxforge",
+  "name": "Wayvox",
   "description": "Private voice, local power. Control on-device speech-to-text, models, and dictation settings.",
   "version": 1,
   "settings-schema": "org.gnome.shell.extensions.whisper-npu",

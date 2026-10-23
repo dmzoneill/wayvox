@@ -396,7 +396,7 @@ const HistoryOverlay = GObject.registerClass(
 const WhisperIndicator = GObject.registerClass(
   class WhisperIndicator extends PanelMenu.Button {
     _init (extension) {
-      super._init(0.0, _('Voxforge'))
+      super._init(0.0, _('Wayvox'))
 
       this._extension = extension
       this._settings = extension.getSettings()
@@ -655,7 +655,7 @@ const WhisperIndicator = GObject.registerClass(
       this._addIconToMenuItem(vocabItem, 'accessories-dictionary-symbolic')
       vocabItem.connect('activate', () => {
         if (!openVocabEditor(this._extension.path))
-          Main.notify(_('Voxforge'), _('Vocabulary editor not found'))
+          Main.notify(_('Wayvox'), _('Vocabulary editor not found'))
       })
       this.menu.addMenuItem(vocabItem)
 
@@ -665,7 +665,7 @@ const WhisperIndicator = GObject.registerClass(
         const host = this._settings.get_string('server-host')
         const port = this._settings.get_int('server-port')
         if (!openAbout(this._extension.path, host, port))
-          Main.notify(_('Voxforge'), _('About dialog not found'))
+          Main.notify(_('Wayvox'), _('About dialog not found'))
       })
       this.menu.addMenuItem(aboutItem)
 
@@ -933,7 +933,7 @@ const WhisperIndicator = GObject.registerClass(
       try {
         const result = await this._client.exportHistory(format)
         if (!result) {
-          Main.notify(_('Voxforge'), _('No history to export'))
+          Main.notify(_('Wayvox'), _('No history to export'))
           return
         }
         const ext = format === 'markdown' ? 'md' : format
@@ -941,10 +941,10 @@ const WhisperIndicator = GObject.registerClass(
         const filePath = GLib.build_filenamev([homePath, `whisper-history.${ext}`])
         const content = format === 'json' ? JSON.stringify(result, null, 2) : result
         saveToFile(filePath, content)
-        Main.notify(_('Voxforge'), _(`History exported to ~/whisper-history.${ext}`))
+        Main.notify(_('Wayvox'), _(`History exported to ~/whisper-history.${ext}`))
       } catch (e) {
         logDebug(`Export failed: ${e.message}`)
-        Main.notify(_('Voxforge'), _(`Export failed: ${e.message}`))
+        Main.notify(_('Wayvox'), _(`Export failed: ${e.message}`))
       }
     }
 
@@ -1092,7 +1092,7 @@ const WhisperIndicator = GObject.registerClass(
 
     async _switchModel (modelName, item) {
       if (!this._connected) {
-        Main.notify(_('Voxforge'), _('Server is not connected'))
+        Main.notify(_('Wayvox'), _('Server is not connected'))
         return
       }
 
@@ -1106,11 +1106,11 @@ const WhisperIndicator = GObject.registerClass(
 
       if (result) {
         this._currentModel = modelName
-        Main.notify(_('Voxforge'), _(`Switched to ${modelName}`))
+        Main.notify(_('Wayvox'), _(`Switched to ${modelName}`))
       } else {
         item.label.set_text(origLabel)
         item.reactive = true
-        Main.notify(_('Voxforge'), _(`Failed to load ${modelName}`))
+        Main.notify(_('Wayvox'), _(`Failed to load ${modelName}`))
       }
       this._populateModelSection()
     }
@@ -1132,11 +1132,11 @@ const WhisperIndicator = GObject.registerClass(
       try {
         await downloadModel(org, modelName)
         item.label.set_text(_(`Downloaded ${modelName}`))
-        Main.notify(_('Voxforge'), _(`Downloaded ${modelName}`))
+        Main.notify(_('Wayvox'), _(`Downloaded ${modelName}`))
       } catch (e) {
         logDebug(`Download failed: ${e.message}`)
         item.label.set_text(_(`Failed: ${modelName}`))
-        Main.notify(_('Voxforge'), _(`Download failed: ${e.message}`))
+        Main.notify(_('Wayvox'), _(`Download failed: ${e.message}`))
       }
       this._populateModelSection()
     }
@@ -1214,11 +1214,11 @@ const WhisperIndicator = GObject.registerClass(
 
       if (result) {
         this._currentLlmModel = modelName
-        Main.notify(_('Voxforge'), _(`LLM: ${modelName}`))
+        Main.notify(_('Wayvox'), _(`LLM: ${modelName}`))
       } else {
         item.label.set_text(origLabel)
         item.reactive = true
-        Main.notify(_('Voxforge'), _(`Failed to load ${modelName}`))
+        Main.notify(_('Wayvox'), _(`Failed to load ${modelName}`))
       }
       this._populateLlmModelSection()
     }
@@ -1233,11 +1233,11 @@ const WhisperIndicator = GObject.registerClass(
       try {
         await downloadLlmModel(org, modelName)
         item.label.set_text(_(`Downloaded ${modelName}`))
-        Main.notify(_('Voxforge'), _(`Downloaded ${modelName}`))
+        Main.notify(_('Wayvox'), _(`Downloaded ${modelName}`))
       } catch (e) {
         logDebug(`LLM download failed: ${e.message}`)
         item.label.set_text(_(`Failed: ${modelName}`))
-        Main.notify(_('Voxforge'), _(`Download failed: ${e.message}`))
+        Main.notify(_('Wayvox'), _(`Download failed: ${e.message}`))
       }
       this._populateLlmModelSection()
     }
@@ -1283,11 +1283,11 @@ const WhisperIndicator = GObject.registerClass(
         await restartService('whisper-server.service')
 
         this._restartServerItem.label.set_text(_('Server restarted'))
-        Main.notify(_('Voxforge'), _('Server restarted'))
+        Main.notify(_('Wayvox'), _('Server restarted'))
       } catch (e) {
         logDebug(`Failed to restart server: ${e.message}`)
         this._restartServerItem.label.set_text(_('Restart failed'))
-        Main.notify(_('Voxforge'), _(`Failed to restart: ${e.message}`))
+        Main.notify(_('Wayvox'), _(`Failed to restart: ${e.message}`))
       }
 
       this._restartServerItem.reactive = true

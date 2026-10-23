@@ -1,4 +1,4 @@
-"""Tests for server-native.py, the Flask-based Voxforge transcription server."""
+"""Tests for server-native.py, the Flask-based Wayvox transcription server."""
 
 import importlib
 import json

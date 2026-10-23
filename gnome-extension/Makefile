@@ -37,7 +37,7 @@ reload: disable enable
 dev: install enable
 	@echo ""
 	@echo "========================================"
-	@echo "Voxforge GNOME extension installed and enabled!"
+	@echo "Wayvox GNOME extension installed and enabled!"
 	@echo "========================================"
 	@echo ""
 	@echo "Watch logs: make logs"

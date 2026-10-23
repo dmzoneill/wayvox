@@ -91,7 +91,7 @@ PlasmaExtras.Representation {
             PlasmaExtras.Heading {
                 Layout.fillWidth: true
                 level: 3
-                text: "Voxforge"
+                text: "Wayvox"
             }
 
             PlasmaComponents.Label {

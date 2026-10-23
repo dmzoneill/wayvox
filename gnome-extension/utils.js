@@ -4,7 +4,7 @@ import Soup from 'gi://Soup'
 
 Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async')
 
-const LOG_PREFIX = '[voxforge]'
+const LOG_PREFIX = '[wayvox]'
 
 // Detect ydotool socket at call time — daemon version and distro affect the path.
 // Priority: YDOTOOL_SOCKET env var → /run/user/<uid>/.ydotool_socket → /tmp/.ydotool_socket

@@ -36,8 +36,8 @@ def report_for(url):
         report["source"] = "local"
         report["warning"] = (
             f"Server did not answer at {url} ({exc.__class__.__name__}: {exc}). "
-            "Library versions below are this Python, not the Voxforge service. "
-            "Action: start or restart the Voxforge service, confirm the tray host and port, then reopen About."
+            "Library versions below are this Python, not the Wayvox service. "
+            "Action: start or restart the Wayvox service, confirm the tray host and port, then reopen About."
         )
         report["text"] = diagnostics.format_report(report)
         return report
@@ -55,7 +55,7 @@ def run_dialog(text):
             super().__init__(application_id="one.whisper.npu.About")
 
         def do_activate(self):
-            window = Gtk.ApplicationWindow(application=self, title="About Voxforge")
+            window = Gtk.ApplicationWindow(application=self, title="About Wayvox")
             window.set_default_size(740, 580)
 
             root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -119,7 +119,7 @@ def run_dialog(text):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Voxforge system information dialog")
+    parser = argparse.ArgumentParser(description="Wayvox system information dialog")
     parser.add_argument("--url", default="", help="GET this /system URL")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5000)

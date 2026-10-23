@@ -1,7 +1,7 @@
 {
     "KPlugin": {
         "Id": "com.whisper.npu",
-        "Name": "Voxforge",
+        "Name": "Wayvox",
         "Description": "Private voice, local power. Control on-device speech-to-text, models, and dictation settings.",
         "Icon": "whisper-npu",
         "Authors": [

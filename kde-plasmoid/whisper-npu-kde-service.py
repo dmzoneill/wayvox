@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""D-Bus service + Qt6 overlay for Voxforge on KDE Plasma.
+"""D-Bus service + Qt6 overlay for Wayvox on KDE Plasma.
 
 Registers com.whisper.LanguageBuddy on the session bus with the same
 interface used by the GNOME extension, so push-to-talk.py works
@@ -26,8 +26,8 @@ from PyQt6.QtWidgets import (
     QPushButton, QSizePolicy, QGraphicsDropShadowEffect
 )
 
-log = logging.getLogger("voxforge-kde")
-logging.basicConfig(level=logging.DEBUG, format="[voxforge-kde] %(message)s")
+log = logging.getLogger("wayvox-kde")
+logging.basicConfig(level=logging.DEBUG, format="[wayvox-kde] %(message)s")
 
 CONFIG_PATH = os.path.expanduser("~/.config/whisper-npu/settings.json")
 DEFAULT_TONES = ["diplomatic", "professional"]

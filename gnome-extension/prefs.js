@@ -153,7 +153,7 @@ export default class WhisperNpuPreferences extends ExtensionPreferences {
     row.activatable = false
     button.connect('clicked', () => {
       if (!openVocabEditor(this.path))
-        row.set_subtitle('Editor not found. Expected vocab-editor.py in the Voxforge checkout.')
+        row.set_subtitle('Editor not found. Expected vocab-editor.py in the Wayvox checkout.')
     })
     group.add(row)
     return group
@@ -173,7 +173,7 @@ export default class WhisperNpuPreferences extends ExtensionPreferences {
     row.activatable = false
     button.connect('clicked', () => {
       if (!openAbout(this.path, settings.get_string('server-host'), settings.get_int('server-port')))
-        row.set_subtitle('About dialog not found. Expected about.py in the Voxforge checkout.')
+        row.set_subtitle('About dialog not found. Expected about.py in the Wayvox checkout.')
     })
     group.add(row)
     return group

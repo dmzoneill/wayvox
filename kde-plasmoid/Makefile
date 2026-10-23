@@ -17,7 +17,7 @@ install:
 	mkdir -p $(dir $(INSTALL_DIR))
 	ln -snf $(CWD) $(INSTALL_DIR)
 	mkdir -p $(CONFIG_DIR)
-	@echo "Plasmoid installed. Add the 'Voxforge' widget to your panel or system tray."
+	@echo "Plasmoid installed. Add the 'Wayvox' widget to your panel or system tray."
 	@echo ""
 	@echo "To install the D-Bus service (required for Language Buddy): make install-service"
 
@@ -49,10 +49,10 @@ disable-service:
 dev: install install-service
 	@echo ""
 	@echo "========================================"
-	@echo "Voxforge KDE plasmoid installed!"
+	@echo "Wayvox KDE plasmoid installed!"
 	@echo "========================================"
 	@echo ""
-	@echo "1. Right-click panel > Add Widgets > search 'Voxforge'"
+	@echo "1. Right-click panel > Add Widgets > search 'Wayvox'"
 	@echo "2. Or add to system tray via System Tray Settings"
 	@echo ""
 	@echo "Watch logs:   make logs"

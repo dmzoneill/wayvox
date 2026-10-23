@@ -1,10 +1,10 @@
-# Voxforge brand
+# Wayvox brand
 
-**Voxforge** is private voice, local power.
+**Wayvox** is private voice, local power.
 
 ## Positioning
 
-Voxforge is an on-device speech-to-text and dictation stack for Linux. It combines
+Wayvox is an on-device speech-to-text and dictation stack for Linux. It combines
 Whisper models, OpenVINO acceleration, Intel NPU/GPU support, and push-to-talk
 desktop integrations without sending audio to a cloud service.
 
