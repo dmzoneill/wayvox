@@ -75,7 +75,9 @@ if command -v gsettings >/dev/null 2>&1 && [[ -f "$PROJECT_DIR/gnome-extension/s
   if gsettings list-keys "$old_schema" >/dev/null 2>&1; then
     while IFS= read -r key; do
       value=$(gsettings get "$old_schema" "$key" 2>/dev/null || true)
-      [[ -n "$value" ]] && gsettings set "$new_schema" "$key" "$value" >/dev/null 2>&1 || true
+      if [[ -n "$value" ]]; then
+        gsettings set "$new_schema" "$key" "$value" >/dev/null 2>&1 || true
+      fi
     done < <(gsettings list-keys "$old_schema" 2>/dev/null)
     printf 'Migrated GNOME settings: %s -> %s\n' "$old_schema" "$new_schema"
   fi
