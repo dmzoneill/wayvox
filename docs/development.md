@@ -51,7 +51,7 @@ make extension-shell
 make extension-logs
 ```
 
-The extension uses technical compatibility IDs and paths so existing GNOME settings continue to work.
+The extension uses Wayvox IDs and paths. The installer migrates legacy GNOME settings and extension registrations before enabling the new extension.
 
 ## KDE plasmoid
 
@@ -85,4 +85,4 @@ make migrate-services
 - `gnome-extension/icons/wayvox-symbolic.svg`: GNOME symbolic icon.
 - `kde-plasmoid/contents/icons/wayvox.svg`: KDE icon.
 
-Keep user-facing product copy as Wayvox. Retain `WHISPER_*`, config paths, model paths, extension IDs, and API compatibility names unless performing a deliberate migration.
+Keep user-facing product copy as Wayvox. Retain `WHISPER_*` environment variables, Whisper model paths, and D-Bus/API compatibility names. `make migrate-branding` moves legacy config/cache data and desktop integration settings to new Wayvox names.

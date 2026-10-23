@@ -9,13 +9,13 @@ English-only prefill spends 3 of those tokens, so "pull request" does not
 fit. word_timestamps=True on the WhisperPipeline constructor compiles a
 447 token slot instead. make install persists that as
 WHISPER_NPU_WORD_TIMESTAMPS=1 and stores the compiled model under
-WHISPER_CACHE_DIR (default ~/.cache/whisper-npu). Set the flag to 0 to
+WHISPER_CACHE_DIR (default ~/.cache/wayvox). Set the flag to 0 to
 keep the 4 token compile. Do not set MAX_PROMPT_LEN. The encoder rejects
 that name. A rejection still drops the arguments for this process.
 WHISPER_DEVICE=GPU also sends the full list. Replacement rules still fix
 mishears the model emits, such as "polar quest" -> "pull request".
 
-The editable file is ~/.config/whisper-npu/vocabulary.json. make install
+The editable file is ~/.config/wayvox/vocabulary.json. make install
 copies share/vocabulary.json there when that file is missing, and leaves an
 existing file alone. If the user file is still missing, the built-in lists
 below are used. The tray editor writes the file. The server reloads it when
@@ -30,6 +30,9 @@ import logging
 import os
 import re
 import threading
+
+from wayvox_paths import cache_dir, vocabulary_file
+
 
 log = logging.getLogger("vocab")
 
@@ -257,20 +260,15 @@ def npu_prompt_slot_enabled():
 
 def whisper_cache_dir():
     """Directory for the compiled NPU model. Empty env disables the cache."""
-    raw = os.environ.get("WHISPER_CACHE_DIR")
-    if raw is None:
-        return os.path.expanduser("~/.cache/whisper-npu")
-    raw = str(raw).strip()
-    if not raw:
-        return None
-    return os.path.expanduser(raw)
+    raw = cache_dir()
+    return raw or None
 
 
 def default_path():
     override = os.environ.get("WHISPER_VOCAB_PATH")
     if override:
         return override
-    return os.path.join(os.path.expanduser("~/.config/whisper-npu"), "vocabulary.json")
+    return str(vocabulary_file())
 
 
 def bundled_path():

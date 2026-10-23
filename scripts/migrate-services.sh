@@ -4,9 +4,13 @@ set -euo pipefail
 SYSTEMD_DIR=${1:?usage: migrate-services.sh SYSTEMD_DIR}
 PROJECT_DIR=${2:-}
 SYSTEMCTL=${SYSTEMCTL:-systemctl}
+RUNTIME_DIR="$PROJECT_DIR"
+if [[ -n "$PROJECT_DIR" && "$(basename "$PROJECT_DIR")" == whisper-npu-server ]]; then
+  RUNTIME_DIR="$(dirname "$PROJECT_DIR")/wayvox"
+fi
 
-# Legacy service names map to Wayvox names. Keep technical environment and
-# config names unchanged, but move user units, drop-ins, and enablement.
+# Legacy service names map to Wayvox names. Keep technical environment names
+# unchanged, but move user units, drop-ins, and enablement.
 legacy_units=(
   whisper-server.service
   whisper-cpp-server.service
@@ -67,7 +71,11 @@ done
 $SYSTEMCTL --user disable --now whisper-npu-kde.service 2>/dev/null || true
 rm -f "$SYSTEMD_DIR/whisper-npu-kde.service"
 if [[ -n "$PROJECT_DIR" && -f "$PROJECT_DIR/kde-plasmoid/wayvox-kde.service" ]]; then
-  cp "$PROJECT_DIR/kde-plasmoid/wayvox-kde.service" "$SYSTEMD_DIR/wayvox-kde.service"
+  tmp_service="$SYSTEMD_DIR/wayvox-kde.service.tmp"
+  while IFS= read -r line; do
+    printf '%s\n' "${line//@WAYVOX_PROJECT_DIR@/$RUNTIME_DIR}"
+  done < "$PROJECT_DIR/kde-plasmoid/wayvox-kde.service" > "$tmp_service"
+  mv "$tmp_service" "$SYSTEMD_DIR/wayvox-kde.service"
 fi
 
 $SYSTEMCTL --user daemon-reload

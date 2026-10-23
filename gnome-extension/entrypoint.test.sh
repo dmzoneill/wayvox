@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-UUID="whisper-npu@dmz.oneill"
+UUID="wayvox@dmz.oneill"
 EXT_DIR="/root/.local/share/gnome-shell/extensions/$UUID"
 GLIB_SCHEMA_DIR="/root/.local/share/glib-2.0/schemas"
 

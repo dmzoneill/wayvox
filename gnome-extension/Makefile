@@ -2,7 +2,7 @@
 
 SHELL := /bin/bash
 CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-UUID = whisper-npu@dmz.oneill
+UUID = wayvox@dmz.oneill
 INSTALL_DIR = ~/.local/share/gnome-shell/extensions/$(UUID)
 SCHEMA_DIR = ~/.local/share/glib-2.0/schemas
 NESTED_RESOLUTION ?= 1280x800
@@ -11,6 +11,7 @@ NESTED_RESOLUTION ?= 1280x800
 GNOME_DEPS = gnome-shell mutter dbus-x11 dbus-tools
 
 install:
+	@$(CWD)/../scripts/migrate-wayvox.sh "$(CWD)/.."
 	mkdir -p $(SCHEMA_DIR)
 	glib-compile-schemas schemas/
 	cp schemas/*.gschema.xml $(SCHEMA_DIR)/
@@ -21,7 +22,7 @@ install:
 
 uninstall: disable
 	rm -f $(INSTALL_DIR)
-	rm -f $(SCHEMA_DIR)/org.gnome.shell.extensions.whisper-npu.gschema.xml
+	rm -f $(SCHEMA_DIR)/org.gnome.shell.extensions.wayvox.gschema.xml
 	glib-compile-schemas $(SCHEMA_DIR)/
 	@echo "Extension uninstalled."
 
@@ -60,7 +61,7 @@ preview: deps install
 	@echo ""
 	env MUTTER_DEBUG_DUMMY_MODE_SPECS=$(NESTED_RESOLUTION) \
 		dbus-run-session -- gnome-shell --nested-wayland 2>&1 | \
-		grep --line-buffered -E '\[whisper-npu\]|error|warning' || true
+		grep --line-buffered -E '\[wayvox\]|error|warning' || true
 
 preview-stop:
 	-pkill -f "gnome-shell --nested-wayland" 2>/dev/null

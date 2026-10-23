@@ -1252,7 +1252,7 @@ class TestLoadAppContexts:
         assert contexts["org.mozilla.Thunderbird.desktop"] == {"tones": ["professional"]}
 
     def test_config_file_merges(self, tmp_path):
-        config_dir = tmp_path / ".config" / "whisper-npu"
+        config_dir = tmp_path / ".config" / "wayvox"
         config_dir.mkdir(parents=True)
         custom = {"custom.app.desktop": {"tones": ["casual"]}}
         (config_dir / "app-contexts.json").write_text(json.dumps(custom))
@@ -1265,7 +1265,7 @@ class TestLoadAppContexts:
         assert "org.mozilla.Thunderbird.desktop" in contexts
 
     def test_config_file_overrides_defaults(self, tmp_path):
-        config_dir = tmp_path / ".config" / "whisper-npu"
+        config_dir = tmp_path / ".config" / "wayvox"
         config_dir.mkdir(parents=True)
         override = {"org.mozilla.Thunderbird.desktop": {"tones": ["casual"]}}
         (config_dir / "app-contexts.json").write_text(json.dumps(override))
@@ -1275,7 +1275,7 @@ class TestLoadAppContexts:
         assert contexts["org.mozilla.Thunderbird.desktop"] == {"tones": ["casual"]}
 
     def test_invalid_json_silenced(self, tmp_path):
-        config_dir = tmp_path / ".config" / "whisper-npu"
+        config_dir = tmp_path / ".config" / "wayvox"
         config_dir.mkdir(parents=True)
         (config_dir / "app-contexts.json").write_text("NOT JSON{{{")
 
@@ -1652,12 +1652,12 @@ class TestFormatDictation:
 class TestTranscriptionHistory:
 
     def test_init_creates_db(self, tmp_path):
-        with patch("os.path.expanduser", return_value=str(tmp_path / "whisper-npu")):
+        with patch("os.path.expanduser", return_value=str(tmp_path / "wayvox")):
             hist = ptt.TranscriptionHistory(max_items=10)
         assert os.path.exists(hist.db_path)
 
     def test_add_and_recent(self, tmp_path):
-        with patch("os.path.expanduser", return_value=str(tmp_path / "whisper-npu")):
+        with patch("os.path.expanduser", return_value=str(tmp_path / "wayvox")):
             hist = ptt.TranscriptionHistory(max_items=10)
         hist.add("first")
         hist.add("second")
@@ -1668,7 +1668,7 @@ class TestTranscriptionHistory:
         assert items[1][0] == "first"
 
     def test_recent_limit(self, tmp_path):
-        with patch("os.path.expanduser", return_value=str(tmp_path / "whisper-npu")):
+        with patch("os.path.expanduser", return_value=str(tmp_path / "wayvox")):
             hist = ptt.TranscriptionHistory(max_items=50)
         for i in range(5):
             hist.add(f"item {i}")
@@ -1676,7 +1676,7 @@ class TestTranscriptionHistory:
         assert len(items) == 2
 
     def test_max_items_trimming(self, tmp_path):
-        with patch("os.path.expanduser", return_value=str(tmp_path / "whisper-npu")):
+        with patch("os.path.expanduser", return_value=str(tmp_path / "wayvox")):
             hist = ptt.TranscriptionHistory(max_items=3)
         for i in range(10):
             hist.add(f"item {i}")
@@ -1689,13 +1689,13 @@ class TestTranscriptionHistory:
         assert "item 7" in texts
 
     def test_empty_recent(self, tmp_path):
-        with patch("os.path.expanduser", return_value=str(tmp_path / "whisper-npu")):
+        with patch("os.path.expanduser", return_value=str(tmp_path / "wayvox")):
             hist = ptt.TranscriptionHistory(max_items=10)
         items = hist.recent(10)
         assert items == []
 
     def test_timestamp_stored(self, tmp_path):
-        with patch("os.path.expanduser", return_value=str(tmp_path / "whisper-npu")):
+        with patch("os.path.expanduser", return_value=str(tmp_path / "wayvox")):
             hist = ptt.TranscriptionHistory(max_items=10)
         hist.add("test")
         items = hist.recent(1)
@@ -1704,14 +1704,14 @@ class TestTranscriptionHistory:
         assert items[0][1] > 0
 
     def test_creates_directory(self, tmp_path):
-        deep_path = tmp_path / "a" / "b" / "whisper-npu"
+        deep_path = tmp_path / "a" / "b" / "wayvox"
         with patch("os.path.expanduser", return_value=str(deep_path)):
             hist = ptt.TranscriptionHistory(max_items=10)
         assert os.path.isdir(deep_path)
 
     def test_table_created_idempotent(self, tmp_path):
         """Creating two History instances on same DB should not fail."""
-        with patch("os.path.expanduser", return_value=str(tmp_path / "whisper-npu")):
+        with patch("os.path.expanduser", return_value=str(tmp_path / "wayvox")):
             hist1 = ptt.TranscriptionHistory(max_items=10)
             hist1.add("test1")
             hist2 = ptt.TranscriptionHistory(max_items=10)

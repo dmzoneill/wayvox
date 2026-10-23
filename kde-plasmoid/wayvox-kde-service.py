@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """D-Bus service + Qt6 overlay for Wayvox on KDE Plasma.
 
-Registers com.whisper.LanguageBuddy on the session bus with the same
+Registers the legacy com.whisper.LanguageBuddy compatibility interface on the
+session bus with the same
 interface used by the GNOME extension, so push-to-talk.py works
 unmodified on KDE.
 
@@ -16,6 +17,8 @@ import sys
 import time
 import urllib.request
 
+from wayvox_paths import config_file
+
 import dbus
 import dbus.mainloop.glib
 import dbus.service
@@ -29,7 +32,7 @@ from PyQt6.QtWidgets import (
 log = logging.getLogger("wayvox-kde")
 logging.basicConfig(level=logging.DEBUG, format="[wayvox-kde] %(message)s")
 
-CONFIG_PATH = os.path.expanduser("~/.config/whisper-npu/settings.json")
+CONFIG_PATH = str(config_file("settings.json"))
 DEFAULT_TONES = ["diplomatic", "professional"]
 
 
@@ -479,7 +482,7 @@ class LanguageBuddyService(dbus.service.Object):
             bus = dbus.SessionBus()
             kwin = bus.get_object("org.kde.KWin", "/KWin")
             iface = dbus.Interface(kwin, "org.kde.KWin")
-            iface.loadScript("/dev/null", "whisper-npu-query")
+            iface.loadScript("/dev/null", "wayvox-query")
         except Exception:
             pass
 
@@ -563,7 +566,7 @@ class LanguageBuddyService(dbus.service.Object):
 def main():
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     app = QApplication(sys.argv)
-    app.setApplicationName("whisper-npu-kde")
+    app.setApplicationName("wayvox-kde")
     app.setQuitOnLastWindowClosed(False)
 
     overlay = LanguageBuddyOverlay()

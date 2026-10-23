@@ -242,7 +242,7 @@ class TestModelManager:
 
     def test_load_model_cache_miss(self, model_mgr, monkeypatch):
         monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "1")
-        monkeypatch.setenv("WHISPER_CACHE_DIR", "/tmp/whisper-npu-test-cache")
+        monkeypatch.setenv("WHISPER_CACHE_DIR", "/tmp/wayvox-test-cache")
         monkeypatch.setattr(server_mod, "ENGINE", "openvino")
         monkeypatch.setattr(server_mod, "DEVICE", "NPU")
         monkeypatch.setattr(server_mod, "_openvino_genai", _mock_ov)
@@ -254,7 +254,7 @@ class TestModelManager:
             device="NPU",
             STATIC_PIPELINE=False,
             word_timestamps=True,
-            CACHE_DIR="/tmp/whisper-npu-test-cache",
+            CACHE_DIR="/tmp/wayvox-test-cache",
         )
         assert "whisper-small-en" in model_mgr.pipelines
 
@@ -959,8 +959,8 @@ class TestTranscribeTimestampsRoute:
 
 
 class TestHistoryExportRoute:
-    def test_no_db(self, client):
-        with patch("os.path.exists", return_value=False), patch("os.path.expanduser", return_value="/tmp/no-such-db"):
+    def test_no_db(self, client, tmp_path):
+        with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export")
         assert resp.status_code == 404
 
@@ -971,7 +971,7 @@ class TestHistoryExportRoute:
             conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("hello", 1700000000.0))
             conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("world", 1700000010.0))
 
-        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
+        with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=json")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -987,7 +987,7 @@ class TestHistoryExportRoute:
             conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
             conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("test entry", 1700000000.0))
 
-        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
+        with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=markdown")
         assert resp.status_code == 200
         assert "text/markdown" in resp.content_type
@@ -1001,7 +1001,7 @@ class TestHistoryExportRoute:
             conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
             conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("subtitle line", 1700000000.0))
 
-        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
+        with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=srt")
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
@@ -1014,7 +1014,7 @@ class TestHistoryExportRoute:
         with sqlite3.connect(db_path) as conn:
             conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
 
-        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
+        with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=xml")
         assert resp.status_code == 400
         assert "Unknown format" in resp.get_json()["error"]
@@ -1026,7 +1026,7 @@ class TestHistoryExportRoute:
             for i in range(10):
                 conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", (f"entry {i}", 1700000000.0 + i))
 
-        with patch("os.path.exists", return_value=True), patch("os.path.expanduser", return_value=db_path):
+        with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=json&limit=3")
         assert resp.status_code == 200
         data = resp.get_json()

@@ -57,7 +57,7 @@ _MODULE_PATH = os.path.join(
     "kde-plasmoid", "wayvox-kde-service.py"
 )
 
-spec = importlib.util.spec_from_file_location("whisper_npu_kde_service", _MODULE_PATH)
+spec = importlib.util.spec_from_file_location("wayvox_npu_kde_service", _MODULE_PATH)
 kde_svc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(kde_svc)
 

@@ -1,6 +1,6 @@
 {
     "KPlugin": {
-        "Id": "com.whisper.npu",
+        "Id": "com.dmzoneill.wayvox",
         "Name": "Wayvox",
         "Description": "Private voice, local power. Control on-device speech-to-text, models, and dictation settings.",
         "Icon": "wayvox",

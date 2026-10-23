@@ -43,6 +43,7 @@ Run this after pulling the Wayvox rebrand into an existing checkout:
 
 ```bash
 make migrate-services
+make migrate-branding
 systemctl --user enable wayvox-server.service wayvox-push-to-talk.service
 make start
 ```
@@ -79,4 +80,12 @@ systemctl --user restart wayvox-push-to-talk.service
 make uninstall
 ```
 
-This stops, disables, and removes current and legacy Wayvox service units. Model and cache data are kept unless removed with `make clean`.
+This stops, disables, and removes current and legacy service units. Model and cache data are kept unless removed with `make clean`.
+
+`make migrate-branding` creates `~/src/usr/wayvox` as a compatibility path when
+the checkout is still named `whisper-npu-server`, moves `~/.config/whisper-npu` and
+`~/.cache/whisper-npu` to their Wayvox locations, copies GNOME settings to the
+new schema, migrates matching systemd drop-in paths, disables the old GNOME
+extension, and removes the old KDE plugin registration. Legacy environment
+variables, model locations, and the
+`com.whisper.LanguageBuddy` D-Bus interface remain readable for compatibility.

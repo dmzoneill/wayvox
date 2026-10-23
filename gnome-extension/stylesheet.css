@@ -1,12 +1,12 @@
-.whisper-option-unselected {
+.wayvox-option-unselected {
   padding-left: 13px;
 }
 
-.whisper-status-label {
+.wayvox-status-label {
   font-style: italic;
 }
 
-.whisper-overlay {
+.wayvox-overlay {
   background-color: rgba(30, 30, 30, 0.95);
   border-radius: 12px;
   padding: 16px;
@@ -16,7 +16,7 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-.whisper-overlay-header {
+.wayvox-overlay-header {
   font-size: 13px;
   font-weight: bold;
   color: rgba(255, 255, 255, 0.6);
@@ -25,7 +25,7 @@
   letter-spacing: 1px;
 }
 
-.whisper-overlay-card {
+.wayvox-overlay-card {
   background-color: rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   padding: 12px;
@@ -34,12 +34,12 @@
   transition-duration: 150ms;
 }
 
-.whisper-overlay-card:hover {
+.wayvox-overlay-card:hover {
   background-color: rgba(255, 255, 255, 0.12);
   border-color: rgba(93, 228, 255, 0.55);
 }
 
-.whisper-overlay-dismiss {
+.wayvox-overlay-dismiss {
   background-color: transparent;
   border-radius: 16px;
   width: 28px;
@@ -49,19 +49,19 @@
   transition-duration: 150ms;
 }
 
-.whisper-overlay-dismiss:hover {
+.wayvox-overlay-dismiss:hover {
   background-color: rgba(255, 255, 255, 0.15);
   color: rgba(255, 255, 255, 0.9);
 }
 
-.whisper-overlay-tone {
+.wayvox-overlay-tone {
   font-size: 11px;
   font-weight: bold;
   color: rgba(93, 228, 255, 0.92);
   margin-bottom: 4px;
 }
 
-.whisper-overlay-text {
+.wayvox-overlay-text {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.9);
   line-height: 1.4;

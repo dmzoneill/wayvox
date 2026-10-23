@@ -64,7 +64,7 @@ make start
 make status
 ```
 
-`make install` detects hardware, installs dependencies, downloads the default model, migrates legacy service names, and enables the primary Wayvox services. The first NPU model load can take several minutes while its compiled cache is created.
+`make install` detects hardware, installs dependencies, downloads the default model, creates a Wayvox checkout path when upgrading an old checkout, migrates config/cache and service names, and enables the primary Wayvox services. The first NPU model load can take several minutes while its compiled cache is created.
 
 ### Try dictation
 

@@ -8,6 +8,8 @@ import queue
 import time
 import threading
 
+from wayvox_paths import history_file
+
 SERVER_START_TIME = time.time()
 
 import diagnostics
@@ -675,7 +677,7 @@ def export_history():
 
     fmt = request.args.get("format", "json")
     limit = request.args.get("limit", "50", type=int)
-    db_path = os.path.expanduser("~/.config/whisper-npu/history.db")
+    db_path = str(history_file())
     if not os.path.exists(db_path):
         return jsonify({"error": "No history database found"}), 404
     with sqlite3.connect(db_path) as conn:

@@ -1,10 +1,10 @@
 {
-  "uuid": "whisper-npu@dmz.oneill",
+  "uuid": "wayvox@dmz.oneill",
   "name": "Wayvox",
   "description": "Private voice, local power. Control on-device speech-to-text, models, and dictation settings.",
   "version": 1,
-  "settings-schema": "org.gnome.shell.extensions.whisper-npu",
-  "gettext-domain": "whisper-npu@dmz.oneill",
+  "settings-schema": "org.gnome.shell.extensions.wayvox",
+  "gettext-domain": "wayvox@dmz.oneill",
   "shell-version": ["46", "47", "48", "49", "50", "51"],
   "url": "https://github.com/dmzoneill/wayvox"
 }

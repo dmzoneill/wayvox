@@ -227,7 +227,7 @@ class TestKdeServiceSmoke:
                 sys.modules[mod_name] = mock_gi
 
         spec = importlib.util.spec_from_file_location(
-            "whisper_npu_kde_service",
+            "wayvox_npu_kde_service",
             os.path.join(os.path.dirname(os.path.dirname(__file__)),
                           "kde-plasmoid", "wayvox-kde-service.py"),
             submodule_search_locations=[]
@@ -261,7 +261,7 @@ class TestKdeServiceSmoke:
 
     def test_config_path_exists(self):
         assert isinstance(self.mod.CONFIG_PATH, str)
-        assert "whisper-npu" in self.mod.CONFIG_PATH
+        assert "wayvox" in self.mod.CONFIG_PATH
 
     def test_type_text_calls_ydotool(self):
         with patch("subprocess.run") as m:

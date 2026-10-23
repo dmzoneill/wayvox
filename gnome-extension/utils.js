@@ -353,7 +353,9 @@ export async function writePttServiceOverride (envVars, pttArgs) {
     content += `Environment="${key}=${value}"\n`
   }
 
-  const srcDir = GLib.build_filenamev([GLib.get_home_dir(), 'src', 'whisper-npu-server'])
+  let srcDir = GLib.build_filenamev([GLib.get_home_dir(), 'src', 'usr', 'wayvox'])
+  if (!GLib.file_test(srcDir, GLib.FileTest.IS_DIR))
+    srcDir = GLib.build_filenamev([GLib.get_home_dir(), 'src', 'usr', 'whisper-npu-server'])
   const argsStr = pttArgs.map(a => `"${a}"`).join(' ')
   content += `ExecStart=\n`
   content += `ExecStart=/usr/bin/python3 ${srcDir}/push-to-talk.py ${argsStr}\n`
@@ -365,7 +367,7 @@ export async function writePttServiceOverride (envVars, pttArgs) {
 }
 
 export function writeSettingsJson (settings) {
-  const configDir = GLib.build_filenamev([GLib.get_home_dir(), '.config', 'whisper-npu'])
+  const configDir = GLib.build_filenamev([GLib.get_home_dir(), '.config', 'wayvox'])
   const configPath = GLib.build_filenamev([configDir, 'settings.json'])
 
   const dir = Gio.file_new_for_path(configDir)
@@ -410,6 +412,7 @@ export function openVocabEditor (extPath) {
   const candidates = []
   if (extPath)
     candidates.push(GLib.build_filenamev([extPath, '..', 'vocab-editor.py']))
+  candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'wayvox', 'vocab-editor.py']))
   candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'whisper-npu-server', 'vocab-editor.py']))
   candidates.push(GLib.build_filenamev([home, 'src', 'whisper-npu-server', 'vocab-editor.py']))
 
@@ -433,6 +436,7 @@ export function openAbout (extPath, host, port) {
   const candidates = []
   if (extPath)
     candidates.push(GLib.build_filenamev([extPath, '..', 'about.py']))
+  candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'wayvox', 'about.py']))
   candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'whisper-npu-server', 'about.py']))
   candidates.push(GLib.build_filenamev([home, 'src', 'whisper-npu-server', 'about.py']))
 

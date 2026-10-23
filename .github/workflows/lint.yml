@@ -28,7 +28,7 @@ jobs:
       - name: Validate GSettings schema
         run: |
           xmllint --noout \
-            gnome-extension/schemas/org.gnome.shell.extensions.whisper-npu.gschema.xml
+            gnome-extension/schemas/org.gnome.shell.extensions.wayvox.gschema.xml
 
       - name: Validate KDE config XML
         run: |

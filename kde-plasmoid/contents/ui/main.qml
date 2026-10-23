@@ -166,7 +166,7 @@ PlasmoidItem {
             "mute-other-streams": Plasmoid.configuration.muteOtherStreams
         }
 
-        var configDir = homeDir + "/.config/whisper-npu"
+        var configDir = homeDir + "/.config/wayvox"
         var configPath = configDir + "/settings.json"
         var content = JSON.stringify(settings, null, 2)
 

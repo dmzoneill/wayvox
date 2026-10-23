@@ -107,7 +107,7 @@ const LanguageBuddyOverlay = GObject.registerClass(
     _init () {
       super._init({
         vertical: true,
-        style_class: 'whisper-overlay',
+        style_class: 'wayvox-overlay',
         reactive: true,
         visible: false
       })
@@ -123,11 +123,11 @@ const LanguageBuddyOverlay = GObject.registerClass(
       const headerBox = new St.BoxLayout({ x_expand: true })
       const headerLabel = new St.Label({
         text: _('Language Buddy'),
-        style_class: 'whisper-overlay-header',
+        style_class: 'wayvox-overlay-header',
         x_expand: true
       })
       const dismissBtn = new St.Button({
-        style_class: 'whisper-overlay-dismiss',
+        style_class: 'wayvox-overlay-dismiss',
         child: new St.Label({ text: '✕' })
       })
       dismissBtn.connect('clicked', () => this._dismiss())
@@ -152,7 +152,7 @@ const LanguageBuddyOverlay = GObject.registerClass(
 
     _addCard (tone, text, ready) {
       const card = new St.Button({
-        style_class: 'whisper-overlay-card',
+        style_class: 'wayvox-overlay-card',
         x_expand: true,
         reactive: ready,
         can_focus: false,
@@ -163,13 +163,13 @@ const LanguageBuddyOverlay = GObject.registerClass(
 
       const toneLabel = new St.Label({
         text: tone.charAt(0).toUpperCase() + tone.slice(1),
-        style_class: 'whisper-overlay-tone'
+        style_class: 'wayvox-overlay-tone'
       })
       cardBox.add_child(toneLabel)
 
       const textLabel = new St.Label({
         text,
-        style_class: 'whisper-overlay-text'
+        style_class: 'wayvox-overlay-text'
       })
       textLabel.clutter_text.set_line_wrap(true)
       textLabel.clutter_text.set_ellipsize(0)
@@ -263,7 +263,7 @@ const HistoryOverlay = GObject.registerClass(
     _init () {
       super._init({
         vertical: true,
-        style_class: 'whisper-overlay',
+        style_class: 'wayvox-overlay',
         reactive: true,
         visible: false
       })
@@ -276,11 +276,11 @@ const HistoryOverlay = GObject.registerClass(
       const headerBox = new St.BoxLayout({ x_expand: true })
       const headerLabel = new St.Label({
         text: _('Transcription History'),
-        style_class: 'whisper-overlay-header',
+        style_class: 'wayvox-overlay-header',
         x_expand: true
       })
       const dismissBtn = new St.Button({
-        style_class: 'whisper-overlay-dismiss',
+        style_class: 'wayvox-overlay-dismiss',
         child: new St.Label({ text: '✕' })
       })
       dismissBtn.connect('clicked', () => this._dismiss())
@@ -290,7 +290,7 @@ const HistoryOverlay = GObject.registerClass(
 
       for (const item of items) {
         const card = new St.Button({
-          style_class: 'whisper-overlay-card',
+          style_class: 'wayvox-overlay-card',
           x_expand: true,
           reactive: true,
           track_hover: true
@@ -301,13 +301,13 @@ const HistoryOverlay = GObject.registerClass(
         const ago = this._timeAgo(item.ts)
         const timeLabel = new St.Label({
           text: ago,
-          style_class: 'whisper-overlay-tone'
+          style_class: 'wayvox-overlay-tone'
         })
         cardBox.add_child(timeLabel)
 
         const textLabel = new St.Label({
           text: item.text.length > 120 ? item.text.substring(0, 120) + '...' : item.text,
-          style_class: 'whisper-overlay-text'
+          style_class: 'wayvox-overlay-text'
         })
         textLabel.clutter_text.set_line_wrap(true)
         textLabel.clutter_text.set_ellipsize(0)
@@ -393,8 +393,8 @@ const HistoryOverlay = GObject.registerClass(
 // Panel indicator with dropdown menu
 // ---------------------------------------------------------------------------
 
-const WhisperIndicator = GObject.registerClass(
-  class WhisperIndicator extends PanelMenu.Button {
+const WayvoxIndicator = GObject.registerClass(
+  class WayvoxIndicator extends PanelMenu.Button {
     _init (extension) {
       super._init(0.0, _('Wayvox'))
 
@@ -615,9 +615,9 @@ const WhisperIndicator = GObject.registerClass(
     _setOptionSelected (item, selected) {
       item.setOrnament(selected ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NONE)
       if (selected)
-        item.remove_style_class_name('whisper-option-unselected')
+        item.remove_style_class_name('wayvox-option-unselected')
       else
-        item.add_style_class_name('whisper-option-unselected')
+        item.add_style_class_name('wayvox-option-unselected')
     }
 
     _addIconToMenuItem (item, iconName) {
@@ -628,7 +628,7 @@ const WhisperIndicator = GObject.registerClass(
 
     _buildMenu () {
       this._statusItem = new PopupMenu.PopupMenuItem(_('Status: Checking...'), { reactive: false })
-      this._statusItem.label.add_style_class_name('whisper-status-label')
+      this._statusItem.label.add_style_class_name('wayvox-status-label')
       this.menu.addMenuItem(this._statusItem)
       this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
 
@@ -938,10 +938,10 @@ const WhisperIndicator = GObject.registerClass(
         }
         const ext = format === 'markdown' ? 'md' : format
         const homePath = GLib.get_home_dir()
-        const filePath = GLib.build_filenamev([homePath, `whisper-history.${ext}`])
+        const filePath = GLib.build_filenamev([homePath, `wayvox-history.${ext}`])
         const content = format === 'json' ? JSON.stringify(result, null, 2) : result
         saveToFile(filePath, content)
-        Main.notify(_('Wayvox'), _(`History exported to ~/whisper-history.${ext}`))
+        Main.notify(_('Wayvox'), _(`History exported to ~/wayvox-history.${ext}`))
       } catch (e) {
         logDebug(`Export failed: ${e.message}`)
         Main.notify(_('Wayvox'), _(`Export failed: ${e.message}`))
@@ -1060,7 +1060,7 @@ const WhisperIndicator = GObject.registerClass(
         this._modelSection.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
 
         const downloadHeader = new PopupMenu.PopupMenuItem(_('Available Downloads'), { reactive: false })
-        downloadHeader.label.add_style_class_name('whisper-status-label')
+        downloadHeader.label.add_style_class_name('wayvox-status-label')
         this._modelSection.menu.addMenuItem(downloadHeader)
 
         const org = this._settings.get_string('hf-org')
@@ -1170,7 +1170,7 @@ const WhisperIndicator = GObject.registerClass(
         this._llmModelSection.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
 
         const downloadHeader = new PopupMenu.PopupMenuItem(_('Available Downloads'), { reactive: false })
-        downloadHeader.label.add_style_class_name('whisper-status-label')
+        downloadHeader.label.add_style_class_name('wayvox-status-label')
         this._llmModelSection.menu.addMenuItem(downloadHeader)
 
         for (const model of available) {
@@ -1340,11 +1340,11 @@ const WhisperIndicator = GObject.registerClass(
 // Extension lifecycle
 // ---------------------------------------------------------------------------
 
-export default class WhisperNpuExtension extends Extension {
+export default class WayvoxExtension extends Extension {
   enable () {
     this._settings = this.getSettings()
-    this._indicator = new WhisperIndicator(this)
-    Main.panel.addToStatusArea('whisper-npu', this._indicator)
+    this._indicator = new WayvoxIndicator(this)
+    Main.panel.addToStatusArea('wayvox', this._indicator)
   }
 
   disable () {

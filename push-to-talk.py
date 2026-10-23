@@ -25,6 +25,8 @@ import threading
 import time as _time
 import wave
 
+from wayvox_paths import CONFIG_DIR, LEGACY_CONFIG_DIR
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -39,7 +41,8 @@ HOLD_THRESHOLD = 1.5
 CORRECTION_WINDOW = 3.0
 MODEL_SIZE_ORDER = ["tiny", "base", "small", "medium", "large"]
 
-CONFIG_PATH = os.path.expanduser("~/.config/whisper-npu/settings.json")
+CONFIG_PATH = str(CONFIG_DIR / "settings.json")
+LEGACY_CONFIG_PATH = str(LEGACY_CONFIG_DIR / "settings.json")
 
 CONFIG_KEY_MAP = {
     "hotkey":                       ("key", str, "KEY_RIGHTCTRL"),
@@ -61,6 +64,8 @@ CONFIG_KEY_MAP = {
 
 def load_config(path=CONFIG_PATH):
     """Load settings from JSON config file. Returns empty dict on failure."""
+    if path == CONFIG_PATH and not os.path.exists(path) and os.path.exists(LEGACY_CONFIG_PATH):
+        path = LEGACY_CONFIG_PATH
     try:
         with open(path) as f:
             return json.load(f)
@@ -783,7 +788,7 @@ class TranscriptionHistory:
 
     def __init__(self, max_items=50):
         self.max_items = max_items
-        db_dir = os.path.expanduser("~/.config/whisper-npu")
+        db_dir = os.path.expanduser("~/.config/wayvox")
         os.makedirs(db_dir, exist_ok=True)
         self.db_path = os.path.join(db_dir, "history.db")
         with sqlite3.connect(self.db_path) as conn:
@@ -823,7 +828,11 @@ def get_focused_app():
 def load_app_contexts():
     """Load per-app context overrides from config file, merged with defaults."""
     contexts = dict(DEFAULT_APP_CONTEXTS)
-    config_path = os.path.expanduser("~/.config/whisper-npu/app-contexts.json")
+    config_path = os.path.expanduser("~/.config/wayvox/app-contexts.json")
+    if not os.path.exists(config_path):
+        legacy_path = os.path.expanduser("~/.config/whisper-npu/app-contexts.json")
+        if os.path.exists(legacy_path):
+            config_path = legacy_path
     if os.path.exists(config_path):
         try:
             with open(config_path) as f:

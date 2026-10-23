@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="gnome-shell-extensions">
-  <schema path="/org/gnome/shell/extensions/whisper-npu/" id="org.gnome.shell.extensions.whisper-npu">
+  <schema path="/org/gnome/shell/extensions/wayvox/" id="org.gnome.shell.extensions.wayvox">
 
     <key name="server-host" type="s">
       <default>'127.0.0.1'</default>

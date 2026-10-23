@@ -3,10 +3,11 @@
 
 SHELL := /bin/bash
 CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-PLUGIN_ID = com.whisper.npu
+PLUGIN_ID = com.dmzoneill.wayvox
+LEGACY_PLUGIN_ID = com.whisper.npu
 INSTALL_DIR = ~/.local/share/plasma/plasmoids/$(PLUGIN_ID)
 SERVICE_DIR = ~/.config/systemd/user
-CONFIG_DIR = ~/.config/whisper-npu
+CONFIG_DIR = ~/.config/wayvox
 
 # Fedora package names — adjust for other distros
 KDE_RUNTIME_DEPS = plasma-workspace python3-dbus python3-pyqt6 dbus-tools
@@ -14,7 +15,9 @@ KDE_PREVIEW_DEPS = plasma-sdk
 KDE_ALL_DEPS = $(KDE_RUNTIME_DEPS) $(KDE_PREVIEW_DEPS)
 
 install:
+	@$(CWD)/../scripts/migrate-wayvox.sh "$(CWD)/.."
 	mkdir -p $(dir $(INSTALL_DIR))
+	-plasmapkg2 --remove $(LEGACY_PLUGIN_ID) 2>/dev/null
 	ln -snf $(CWD) $(INSTALL_DIR)
 	mkdir -p $(CONFIG_DIR)
 	@echo "Plasmoid installed. Add the 'Wayvox' widget to your panel or system tray."
@@ -23,13 +26,14 @@ install:
 
 uninstall:
 	rm -f $(INSTALL_DIR)
+	-plasmapkg2 --remove $(PLUGIN_ID) 2>/dev/null
 	@echo "Plasmoid uninstalled."
 
 install-service:
 	mkdir -p $(SERVICE_DIR)
 	-systemctl --user disable --now whisper-npu-kde.service 2>/dev/null
 	rm -f $(SERVICE_DIR)/whisper-npu-kde.service
-	cp $(CWD)/wayvox-kde.service $(SERVICE_DIR)/
+	while IFS= read -r line; do printf '%s\n' "$${line//@WAYVOX_PROJECT_DIR@/$(CWD)}"; done < $(CWD)/wayvox-kde.service > $(SERVICE_DIR)/wayvox-kde.service
 	systemctl --user daemon-reload
 	systemctl --user enable wayvox-kde.service
 	systemctl --user start wayvox-kde.service

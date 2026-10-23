@@ -547,8 +547,8 @@ PlasmaExtras.Representation {
                     icon.name: "accessories-dictionary"
                     onClicked: {
                         var home = root.homeDir
-                        var cmd = "python3 \"" + home + "/src/usr/whisper-npu-server/vocab-editor.py\""
-                        cmd += " || python3 \"" + home + "/src/whisper-npu-server/vocab-editor.py\""
+                        var cmd = "python3 \"" + home + "/src/usr/wayvox/vocab-editor.py\""
+                        cmd += " || python3 \"" + home + "/src/usr/whisper-npu-server/vocab-editor.py\""
                         root.executable.exec(cmd)
                     }
                 }
@@ -569,7 +569,7 @@ PlasmaExtras.Representation {
                         var home = root.homeDir
                         var host = String(serverHost || "127.0.0.1").replace(/[^A-Za-z0-9._:-]/g, "")
                         var port = parseInt(serverPort, 10) || 5000
-                        var cmd = "python3 \"" + home + "/src/usr/whisper-npu-server/about.py\" --host " + host + " --port " + port
+                        var cmd = "python3 \"" + home + "/src/usr/wayvox/about.py\" --host " + host + " --port " + port
                         cmd += " || python3 \"" + home + "/src/whisper-npu-server/about.py\" --host " + host + " --port " + port
                         root.executable.exec(cmd)
                     }
@@ -630,7 +630,7 @@ PlasmaExtras.Representation {
     function exportHistory(format) {
         var ext = format === "markdown" ? "md" : format
         var home = root.homeDir
-        var filePath = home + "/whisper-history." + ext
+        var filePath = home + "/wayvox-history." + ext
 
         root.httpGet(root.serverUrl("/history/export?format=" + format + "&limit=50"),
             function(data, err) {

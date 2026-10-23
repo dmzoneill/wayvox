@@ -32,8 +32,10 @@ full-color product mark.
 
 This is a product rename with an explicit service migration. New user services
 use `wayvox-*`; `make install-services` disables and removes old service units.
-Environment variables, extension IDs, config paths, and model paths keep their
-technical names so installed settings and model data remain usable.
+`WHISPER_*` environment variables, Whisper model paths, and the
+`com.whisper.LanguageBuddy` D-Bus interface remain compatibility identifiers.
+The installer migrates config/cache data, GNOME settings, extension IDs, KDE
+plugin registration, and service units to Wayvox names.
 
 ## Repository assets
 

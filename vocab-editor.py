@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Edit Whisper technical terms and mishear replacements.
 
-Opened from the GNOME or KDE tray. Writes ~/.config/whisper-npu/vocabulary.json.
+Opened from the GNOME or KDE tray. Writes ~/.config/wayvox/vocabulary.json.
 The transcription server reloads that file on the next utterance.
 """
 

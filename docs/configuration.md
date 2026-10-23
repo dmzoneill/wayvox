@@ -11,7 +11,7 @@ Override defaults with `make install VAR=value`:
 | `WHISPER_CPP_DEVICE` | `NPU` | whisper.cpp encoder device |
 | `WHISPER_CPP_PORT` | `5001` | whisper.cpp server port |
 | `WHISPER_NPU_WORD_TIMESTAMPS` | `1` | Compile a wider NPU prompt slot |
-| `WHISPER_CACHE_DIR` | `~/.cache/whisper-npu` | Compiled model cache |
+| `WHISPER_CACHE_DIR` | `~/.cache/wayvox` | Compiled model cache |
 
 Example:
 
@@ -42,7 +42,7 @@ The optional whisper.cpp model cache is `~/.cache/whisper/`.
 Wayvox combines prompt biasing with regex replacements. The bundled vocabulary is installed at:
 
 ```text
-~/.config/whisper-npu/vocabulary.json
+~/.config/wayvox/vocabulary.json
 ```
 
 Existing files are never overwritten by `make install`. Edit vocabulary from the GNOME or KDE UI, or edit the JSON file directly. Changes apply on the next transcription.

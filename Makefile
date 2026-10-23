@@ -1,6 +1,10 @@
 SHELL := /bin/bash
 
 PROJECT_DIR  := $(CURDIR)
+WAYVOX_RUNTIME_DIR := $(PROJECT_DIR)
+ifeq ($(notdir $(PROJECT_DIR)),whisper-npu-server)
+WAYVOX_RUNTIME_DIR := $(dir $(PROJECT_DIR))wayvox
+endif
 SYSTEMD_DIR  := $(HOME)/.config/systemd/user
 PYTHON       := /usr/bin/python3
 BRAND_NAME   := Wayvox
@@ -13,7 +17,7 @@ WHISPER_CPP_DEVICE ?= NPU
 # 1 compiles NPU Whisper with word_timestamps so the prompt slot is 447.
 # 0 keeps the 4 token slot. The compiled blob is reused from the cache dir.
 WHISPER_NPU_WORD_TIMESTAMPS ?= 1
-WHISPER_CACHE_DIR ?= $(HOME)/.cache/whisper-npu
+WHISPER_CACHE_DIR ?= $(HOME)/.cache/wayvox
 
 SYSTEM_PKGS := ydotool pipewire-pulseaudio pipewire-utils pulseaudio-utils \
                wtype wl-clipboard xdotool \
@@ -38,7 +42,7 @@ WHISPER_MODELS_DIR := $(HOME)/.whisper/models
 HF_ORG := OpenVINO
 
 .PHONY: help install install-python install-system install-whisper-cpp \
-        install-services migrate-services install-permissions install-models install-vocab enable start \
+        install-services migrate-services migrate-branding install-permissions install-models install-vocab enable start \
         stop restart status logs logs-server logs-cpp logs-ptt \
         test uninstall clean \
         extension extension-install extension-uninstall extension-enable \
@@ -72,7 +76,7 @@ help: ## Show available targets
 # Full install
 # ----------------------------------------------------------------------------
 
-install: install-system install-python install-whisper-cpp install-permissions install-models install-vocab install-services extension-install enable start ## Install everything
+install: install-system install-python install-whisper-cpp install-permissions install-models install-vocab migrate-branding install-services extension-install enable start ## Install everything
 
 # ----------------------------------------------------------------------------
 # Python dependencies
@@ -233,6 +237,9 @@ migrate-services: ## Migrate legacy user services, drop-ins, and enablement to W
 
 install-services: migrate-services ## Install Wayvox services and migrate legacy names
 
+migrate-branding: ## Migrate legacy config, cache, and desktop integration names to Wayvox
+	@$(PROJECT_DIR)/scripts/migrate-wayvox.sh "$(PROJECT_DIR)"
+
 $(SYSTEMD_DIR)/wayvox-server.service:
 	@mkdir -p $(SYSTEMD_DIR)
 	@printf '%s\n' \
@@ -242,8 +249,8 @@ $(SYSTEMD_DIR)/wayvox-server.service:
 		'' \
 		'[Service]' \
 		'Type=simple' \
-		'WorkingDirectory=$(PROJECT_DIR)' \
-		'ExecStart=$(PYTHON) $(PROJECT_DIR)/server-native.py' \
+		'WorkingDirectory=$(WAYVOX_RUNTIME_DIR)' \
+		'ExecStart=$(PYTHON) $(WAYVOX_RUNTIME_DIR)/server-native.py' \
 		'Environment=WHISPER_DEVICE=$(WHISPER_DEVICE)' \
 		'Environment=WHISPER_MODEL=$(WHISPER_MODEL)' \
 		'Environment=WHISPER_CT2_MODEL=$(WHISPER_CT2_MODEL)' \
@@ -274,9 +281,9 @@ $(SYSTEMD_DIR)/wayvox-cpp-server.service:
 		'' \
 		'[Service]' \
 		'Type=simple' \
-		"WorkingDirectory=$(PROJECT_DIR)" \
+		"WorkingDirectory=$(WAYVOX_RUNTIME_DIR)" \
 		"Environment=LD_LIBRARY_PATH=$$LD_PATH" \
-		"ExecStart=$(PYTHON) $(PROJECT_DIR)/server-whisper-cpp.py --port $(WHISPER_CPP_PORT) --model $(WHISPER_CPP_MODELS_DIR)/$(WHISPER_CPP_MODEL) --device $$CPP_DEVICE --no-speech-thold 1.0" \
+		"ExecStart=$(PYTHON) $(WAYVOX_RUNTIME_DIR)/server-whisper-cpp.py --port $(WHISPER_CPP_PORT) --model $(WHISPER_CPP_MODELS_DIR)/$(WHISPER_CPP_MODEL) --device $$CPP_DEVICE --no-speech-thold 1.0" \
 		'Restart=on-failure' \
 		'RestartSec=5' \
 		'' \
@@ -296,7 +303,7 @@ $(SYSTEMD_DIR)/wayvox-push-to-talk.service:
 		'Environment=XDG_SESSION_TYPE=wayland' \
 		'Environment=YDOTOOL_SOCKET=/tmp/.ydotool_socket' \
 		'ExecStartPre=/bin/bash -c '"'"'i=0; while [ $$i -lt 60 ]; do curl -sf http://127.0.0.1:5000/health >/dev/null 2>&1 && exit 0; sleep 1; i=$$((i+1)); done; echo wayvox-server not ready after 60s; exit 1'"'"'' \
-		'ExecStart=/usr/bin/sg input -c '"'"'$(PYTHON) $(PROJECT_DIR)/push-to-talk.py --key KEY_RIGHTCTRL --backend openvino'"'"'' \
+		'ExecStart=/usr/bin/sg input -c '"'"'$(PYTHON) $(WAYVOX_RUNTIME_DIR)/push-to-talk.py --key KEY_RIGHTCTRL --backend openvino'"'"'' \
 		'Restart=on-failure' \
 		'RestartSec=3' \
 		'' \
@@ -398,16 +405,17 @@ clean: ## Remove downloaded models (destructive, prompts for confirmation)
 # ----------------------------------------------------------------------------
 
 EXTENSION_DIR     := $(PROJECT_DIR)/gnome-extension
-EXTENSION_UUID    := whisper-npu@dmz.oneill
+EXTENSION_UUID    := wayvox@dmz.oneill
 EXTENSION_INSTALL := $(HOME)/.local/share/gnome-shell/extensions/$(EXTENSION_UUID)
 SCHEMA_DIR        := $(HOME)/.local/share/glib-2.0/schemas
 
 # Dev test container (Fedora 44 / GNOME Shell 50 — same as host; devkit window on host Wayland desktop)
-EXTENSION_TEST_IMAGE     := whisper-npu-gnome-test
-EXTENSION_TEST_CONTAINER := whisper-npu-test
+EXTENSION_TEST_IMAGE     := wayvox-gnome-test
+EXTENSION_TEST_CONTAINER := wayvox-gnome-test
 WAYLAND_SOCK             := $(shell ls /run/user/$(shell id -u)/wayland-0 2>/dev/null || echo /run/user/$(shell id -u)/wayland-1)
 
 extension-install: ## Install GNOME extension (symlink + schemas + pre-enable)
+	@$(PROJECT_DIR)/scripts/migrate-wayvox.sh "$(PROJECT_DIR)"
 	mkdir -p $(SCHEMA_DIR)
 	glib-compile-schemas $(EXTENSION_DIR)/schemas/
 	cp $(EXTENSION_DIR)/schemas/*.gschema.xml $(SCHEMA_DIR)/
@@ -428,7 +436,7 @@ extension-install: ## Install GNOME extension (symlink + schemas + pre-enable)
 
 extension-uninstall: extension-disable ## Uninstall GNOME extension
 	rm -f $(EXTENSION_INSTALL)
-	rm -f $(SCHEMA_DIR)/org.gnome.shell.extensions.whisper-npu.gschema.xml
+	rm -f $(SCHEMA_DIR)/org.gnome.shell.extensions.wayvox.gschema.xml
 	glib-compile-schemas $(SCHEMA_DIR)/
 	@echo "Extension uninstalled."
 

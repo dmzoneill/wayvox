@@ -1,4 +1,4 @@
-"""Shared fixtures for whisper-npu-server tests."""
+"""Shared fixtures for Wayvox tests."""
 
 import io
 import json
@@ -20,7 +20,7 @@ if PROJECT_ROOT not in sys.path:
 # Keep server tests off the user's real vocabulary file.
 os.environ.setdefault(
     "WHISPER_VOCAB_PATH",
-    os.path.join(os.path.expanduser("~"), ".cache", "whisper-npu-pytest-vocab-absent.json"),
+    os.path.join(os.path.expanduser("~"), ".cache", "wayvox-pytest-vocab-absent.json"),
 )
 
 
@@ -84,8 +84,8 @@ def silent_raw():
 
 @pytest.fixture
 def tmp_config(tmp_path):
-    """Create a temporary whisper-npu config directory."""
-    config_dir = tmp_path / "whisper-npu"
+    """Create a temporary Wayvox config directory."""
+    config_dir = tmp_path / "wayvox"
     config_dir.mkdir()
     settings = {
         "server-host": "127.0.0.1",
