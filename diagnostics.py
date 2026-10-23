@@ -250,7 +250,7 @@ def collect():
     """Facts visible to this Python process. Does not load a Whisper model."""
     libraries = {name: _dist_version(name) for name in _LIBRARIES}
     return {
-        "app": {"name": "Whisper NPU", "version": app_version()},
+        "app": {"name": "Voxforge", "version": app_version()},
         "python": platform.python_version(),
         "python_executable": sys.executable,
         "platform": platform.platform(),
@@ -403,7 +403,7 @@ def format_report(report):
     """Plain text shown in the About dialog."""
     app = report.get("app") or {}
     lines = [
-        f"Whisper NPU {app.get('version', 'unknown')}",
+        f"Voxforge {app.get('version', 'unknown')}",
         f"Source: {report.get('source', 'local')}",
     ]
     if report.get("warning"):

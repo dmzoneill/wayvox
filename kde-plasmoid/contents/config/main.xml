@@ -9,12 +9,12 @@
   <group name="General">
     <entry name="serverHost" type="String">
       <default>127.0.0.1</default>
-      <label>Hostname or IP of the Whisper NPU server</label>
+      <label>Hostname or IP of the Voxforge server</label>
     </entry>
 
     <entry name="serverPort" type="Int">
       <default>5000</default>
-      <label>Port number of the Whisper NPU server</label>
+      <label>Port number of the Voxforge server</label>
     </entry>
 
     <entry name="device" type="String">

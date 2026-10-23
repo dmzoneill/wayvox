@@ -1,9 +1,9 @@
 {
     "KPlugin": {
         "Id": "com.whisper.npu",
-        "Name": "Whisper NPU",
-        "Description": "Control panel for Whisper NPU speech-to-text server. Switch models, download new models from HuggingFace, and configure server options.",
-        "Icon": "audio-input-microphone",
+        "Name": "Voxforge",
+        "Description": "Private voice, local power. Control on-device speech-to-text, models, and dictation settings.",
+        "Icon": "whisper-npu",
         "Authors": [
             {
                 "Name": "David O Neill",

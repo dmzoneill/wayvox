@@ -5,13 +5,13 @@
     <key name="server-host" type="s">
       <default>'127.0.0.1'</default>
       <summary>Server host</summary>
-      <description>Hostname or IP of the Whisper NPU server</description>
+      <description>Hostname or IP of the Voxforge server</description>
     </key>
 
     <key name="server-port" type="i">
       <default>5000</default>
       <summary>Server port</summary>
-      <description>Port number of the Whisper NPU server</description>
+      <description>Port number of the Voxforge server</description>
     </key>
 
     <key name="device" type="s">

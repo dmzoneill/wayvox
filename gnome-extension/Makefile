@@ -37,7 +37,7 @@ reload: disable enable
 dev: install enable
 	@echo ""
 	@echo "========================================"
-	@echo "Whisper NPU extension installed and enabled!"
+	@echo "Voxforge GNOME extension installed and enabled!"
 	@echo "========================================"
 	@echo ""
 	@echo "Watch logs: make logs"

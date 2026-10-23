@@ -1,4 +1,4 @@
-"""Tests for server-native.py — the Flask-based Whisper NPU transcription server."""
+"""Tests for server-native.py, the Flask-based Voxforge transcription server."""
 
 import importlib
 import json

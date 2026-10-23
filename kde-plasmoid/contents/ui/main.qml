@@ -21,10 +21,10 @@ PlasmoidItem {
     switchWidth: Kirigami.Units.gridUnit * 20
     switchHeight: Kirigami.Units.gridUnit * 30
 
-    toolTipMainText: "Whisper NPU"
+    toolTipMainText: "Voxforge"
     toolTipSubText: connected ? "Connected | Model: " + currentModel : "Disconnected"
 
-    Plasmoid.icon: "audio-input-microphone"
+    Plasmoid.icon: "whisper-npu"
 
     compactRepresentation: CompactRepresentation {}
 

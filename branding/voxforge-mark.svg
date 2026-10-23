@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Voxforge mark</title>
+  <desc id="desc">A cyan and coral V shaped voice waveform on a dark background.</desc>
+  <defs>
+    <linearGradient id="signal" x1="42" y1="42" x2="214" y2="214" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5DE4FF"/>
+      <stop offset="0.56" stop-color="#5DE4FF"/>
+      <stop offset="1" stop-color="#FF8066"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="64" fill="#101827"/>
+  <path d="M48 56 94 185c4 12 13 18 34 18s30-6 34-18l46-129" fill="none" stroke="url(#signal)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M128 78v94" stroke="#F4F7FB" stroke-width="12" stroke-linecap="round" opacity=".96"/>
+  <circle cx="128" cy="62" r="10" fill="#F4F7FB"/>
+</svg>

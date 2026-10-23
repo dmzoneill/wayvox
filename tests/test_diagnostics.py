@@ -44,7 +44,7 @@ def test_pci_sysfs_class_codes(tmp_path):
 
 def test_format_report_names_devices_library_and_failover():
     report = {
-        "app": {"name": "Whisper NPU", "version": "0.0.2"},
+        "app": {"name": "Voxforge", "version": "0.0.2"},
         "source": "whisper-server",
         "python": "3.14.0",
         "python_executable": "/venv/bin/python",
@@ -99,7 +99,7 @@ def test_format_report_names_devices_library_and_failover():
         },
     }
     text = diagnostics.format_report(report)
-    assert "Whisper NPU 0.0.2" in text
+    assert "Voxforge 0.0.2" in text
     assert "OpenVINO GenAI WhisperPipeline, device plugin NPU" in text
     assert "Intel AI Boost" in text
     assert "Intel Arc Graphics" in text

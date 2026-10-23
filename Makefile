@@ -3,6 +3,7 @@ SHELL := /bin/bash
 PROJECT_DIR  := $(CURDIR)
 SYSTEMD_DIR  := $(HOME)/.config/systemd/user
 PYTHON       := /usr/bin/python3
+BRAND_NAME   := Voxforge
 
 WHISPER_DEVICE     ?= auto
 WHISPER_MODEL      ?= whisper-small.en-fp16-ov
@@ -48,7 +49,7 @@ HF_ORG := OpenVINO
 # ----------------------------------------------------------------------------
 
 help: ## Show available targets
-	@echo "whisper-npu-server"
+	@echo "$(BRAND_NAME) - private voice, local power"
 	@echo ""
 	@echo "Targets:"
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
@@ -441,7 +442,7 @@ extension-reload: extension-install ## Reload extension (disable/enable) — JS 
 extension-dev: extension-install extension-enable ## Install and enable GNOME extension for development
 	@echo ""
 	@echo "========================================"
-	@echo "Whisper NPU extension installed and enabled!"
+	@echo "$(BRAND_NAME) GNOME extension installed and enabled!"
 	@echo "========================================"
 	@echo ""
 	@echo "Watch logs: make extension-logs"

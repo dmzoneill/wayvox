@@ -36,7 +36,7 @@
 
 .whisper-overlay-card:hover {
   background-color: rgba(255, 255, 255, 0.12);
-  border-color: rgba(120, 174, 237, 0.5);
+  border-color: rgba(93, 228, 255, 0.55);
 }
 
 .whisper-overlay-dismiss {
@@ -57,7 +57,7 @@
 .whisper-overlay-tone {
   font-size: 11px;
   font-weight: bold;
-  color: rgba(120, 174, 237, 0.9);
+  color: rgba(93, 228, 255, 0.92);
   margin-bottom: 4px;
 }
 

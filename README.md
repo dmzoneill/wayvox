@@ -1,6 +1,14 @@
-# Whisper NPU Server
+# Voxforge
 
-Local speech-to-text transcription server that runs entirely on Intel NPU hardware via OpenVINO. Includes a push-to-talk voice dictation client for Wayland desktops.
+<img src="branding/voxforge-mark.svg" alt="Voxforge mark" width="120">
+
+**Private voice, local power.**
+
+On-device speech-to-text and push-to-talk dictation for Linux. Voxforge runs Whisper locally through OpenVINO, Intel NPU/GPU, CUDA, or CPU backends, then types the result into the focused Wayland application.
+
+The technical runtime keeps its existing `whisper-*` service names, environment variables, config paths, and model paths for backwards compatibility.
+
+See [branding/README.md](branding/README.md) for product voice, palette, and icon direction.
 
 ## Quick Start
 
