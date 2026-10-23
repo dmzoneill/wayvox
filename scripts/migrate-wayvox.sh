@@ -51,7 +51,13 @@ move_tree "$HOME_DIR/.cache/whisper-npu" "$HOME_DIR/.cache/wayvox"
 # remain unchanged for compatibility.
 systemd_dir="$HOME_DIR/.config/systemd/user"
 if [[ "$RUNTIME_DIR" != "$PROJECT_DIR" && -d "$systemd_dir" ]]; then
-  while IFS= read -r -d '' service_file; do
+  shopt -s nullglob
+  service_files=(
+    "$systemd_dir"/wayvox-*.service
+    "$systemd_dir"/wayvox-*.service.d/*
+  )
+  for service_file in "${service_files[@]}"; do
+    [[ -f "$service_file" ]] || continue
     tmp_file="$service_file.tmp"
     while IFS= read -r line; do
       line="${line//$PROJECT_DIR/$RUNTIME_DIR}"
@@ -59,7 +65,8 @@ if [[ "$RUNTIME_DIR" != "$PROJECT_DIR" && -d "$systemd_dir" ]]; then
       printf '%s\n' "$line"
     done < "$service_file" > "$tmp_file"
     mv "$tmp_file" "$service_file"
-  done < <(printf '%s\0' "$systemd_dir"/wayvox-*.service "$systemd_dir"/wayvox-*.service.d/* 2>/dev/null)
+  done
+  shopt -u nullglob
 fi
 
 # Migrate GNOME settings while the legacy schema is still installed.

@@ -385,7 +385,7 @@ export async function restartService(serviceName) {
   return execCommand(["systemctl", "--user", "restart", serviceName]);
 }
 
-export async function writePttServiceOverride(envVars, pttArgs) {
+export async function writePttServiceOverride(envVars, pttArgs, extPath = null) {
   const overrideDir = GLib.build_filenamev([
     GLib.get_home_dir(),
     ".config",
@@ -409,23 +409,17 @@ export async function writePttServiceOverride(envVars, pttArgs) {
     content += `Environment="${key}=${value}"\n`;
   }
 
-  let srcDir = GLib.build_filenamev([
-    GLib.get_home_dir(),
-    "src",
-    "usr",
-    "wayvox",
-  ]);
-  const srcDirReady = GLib.file_test(srcDir, GLib.FileTest.IS_DIR);
-  if (!srcDirReady)
-    srcDir = GLib.build_filenamev([
-      GLib.get_home_dir(),
-      "src",
-      "usr",
-      "whisper-npu-server",
-    ]);
+  const srcDir = extPath
+    ? GLib.build_filenamev([extPath, ".."])
+    : null;
+  if (!srcDir || !GLib.file_test(srcDir, GLib.FileTest.IS_DIR)) {
+    throw new Error("Wayvox project path unavailable to GNOME extension");
+  }
+  const python = GLib.find_program_in_path("python3");
+  if (!python) throw new Error("python3 unavailable to GNOME extension");
   const argsStr = pttArgs.map((a) => `"${a}"`).join(" ");
   content += `ExecStart=\n`;
-  content += `ExecStart=/usr/bin/python3 ${srcDir}/push_to_talk.py ${argsStr}\n`;
+  content += `ExecStart=${python} ${srcDir}/push_to_talk.py ${argsStr}\n`;
 
   const file = Gio.file_new_for_path(overridePath);
   file.replace_contents(
@@ -504,30 +498,9 @@ export async function writeServiceOverride(serviceName, envVars) {
 }
 
 export function openVocabEditor(extPath) {
-  const home = GLib.get_home_dir();
   const candidates = [];
   if (extPath)
     candidates.push(GLib.build_filenamev([extPath, "..", "vocab_editor.py"]));
-  candidates.push(
-    GLib.build_filenamev([home, "src", "usr", "wayvox", "vocab_editor.py"]),
-  );
-  candidates.push(
-    GLib.build_filenamev([
-      home,
-      "src",
-      "usr",
-      "whisper-npu-server",
-      "vocab_editor.py",
-    ]),
-  );
-  candidates.push(
-    GLib.build_filenamev([
-      home,
-      "src",
-      "whisper-npu-server",
-      "vocab_editor.py",
-    ]),
-  );
 
   for (const path of candidates) {
     if (!GLib.file_test(path, GLib.FileTest.EXISTS)) continue;
@@ -544,25 +517,9 @@ export function openVocabEditor(extPath) {
 }
 
 export function openAbout(extPath, host, port) {
-  const home = GLib.get_home_dir();
   const candidates = [];
   if (extPath)
     candidates.push(GLib.build_filenamev([extPath, "..", "about.py"]));
-  candidates.push(
-    GLib.build_filenamev([home, "src", "usr", "wayvox", "about.py"]),
-  );
-  candidates.push(
-    GLib.build_filenamev([
-      home,
-      "src",
-      "usr",
-      "whisper-npu-server",
-      "about.py",
-    ]),
-  );
-  candidates.push(
-    GLib.build_filenamev([home, "src", "whisper-npu-server", "about.py"]),
-  );
 
   const safeHost =
     String(host || "127.0.0.1").replace(/[^A-Za-z0-9._:-]/g, "") || "127.0.0.1";

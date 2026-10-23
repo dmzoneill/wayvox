@@ -6,7 +6,7 @@ ifeq ($(notdir $(PROJECT_DIR)),whisper-npu-server)
 WAYVOX_RUNTIME_DIR := $(dir $(PROJECT_DIR))wayvox
 endif
 SYSTEMD_DIR  := $(HOME)/.config/systemd/user
-PYTHON       := /usr/bin/python3
+PYTHON       ?= $(shell command -v python3 2>/dev/null || printf '%s' python3)
 BRAND_NAME   := Wayvox
 
 WHISPER_DEVICE     ?= auto

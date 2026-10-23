@@ -546,9 +546,8 @@ PlasmaExtras.Representation {
                     text: "Edit Vocabulary..."
                     icon.name: "accessories-dictionary"
                     onClicked: {
-                        var home = root.homeDir
-                        var cmd = "python3 \"" + home + "/src/usr/wayvox/vocab_editor.py\""
-                        cmd += " || python3 \"" + home + "/src/usr/whisper-npu-server/vocab_editor.py\""
+                        var script = Qt.resolvedUrl("../../../vocab_editor.py").toLocalFile()
+                        var cmd = "python3 \"" + script + "\""
                         root.executable.exec(cmd)
                     }
                 }
@@ -566,11 +565,10 @@ PlasmaExtras.Representation {
                     text: "About..."
                     icon.name: "help-about"
                     onClicked: {
-                        var home = root.homeDir
                         var host = String(serverHost || "127.0.0.1").replace(/[^A-Za-z0-9._:-]/g, "")
                         var port = parseInt(serverPort, 10) || 5000
-                        var cmd = "python3 \"" + home + "/src/usr/wayvox/about.py\" --host " + host + " --port " + port
-                        cmd += " || python3 \"" + home + "/src/whisper-npu-server/about.py\" --host " + host + " --port " + port
+                        var script = Qt.resolvedUrl("../../../about.py").toLocalFile()
+                        var cmd = "python3 \"" + script + "\" --host " + host + " --port " + port
                         root.executable.exec(cmd)
                     }
                 }

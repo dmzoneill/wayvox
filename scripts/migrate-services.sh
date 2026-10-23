@@ -22,6 +22,9 @@ new_units=(
 	wayvox-push-to-talk.service
 )
 
+OLD_VENV_PREFIX="${HOME:-}/.local/share/virtualenvs/whisper-npu-server"
+NEW_VENV_PREFIX="${HOME:-}/.local/share/virtualenvs/wayvox"
+
 was_enabled=()
 was_active=()
 for i in "${!legacy_units[@]}"; do
@@ -99,15 +102,21 @@ if [[ "$kde_was_enabled" == 1 && -f "$SYSTEMD_DIR/wayvox-kde.service" ]]; then
 	printf 'Migrated enablement: whisper-npu-kde.service -> wayvox-kde.service\n'
 fi
 
-# Older Wayvox installs used hyphenated script filenames. Rewrite existing
-# Wayvox units so a checkout that has since adopted Python module filenames
-# can start without requiring a manual systemd override.
+# Rewrite migrated units so old checkout, virtualenv, and script paths work
+# after a rebrand without requiring manual systemd overrides.
+shopt -s nullglob
 for service_file in "$SYSTEMD_DIR"/wayvox*.service "$SYSTEMD_DIR"/wayvox*.service.d/*; do
 	if [[ ! -f "$service_file" ]]; then
 		continue
 	fi
 	tmp_service="$service_file.tmp"
 	while IFS= read -r line; do
+		if [[ -n "$PROJECT_DIR" ]]; then
+			line=${line//$PROJECT_DIR/$RUNTIME_DIR}
+		fi
+		if [[ -n "${HOME:-}" ]]; then
+			line=${line//$OLD_VENV_PREFIX/$NEW_VENV_PREFIX}
+		fi
 		line=${line//server-native.py/server_native.py}
 		line=${line//server-whisper-cpp.py/server_whisper_cpp.py}
 		line=${line//push-to-talk.py/push_to_talk.py}
@@ -116,5 +125,6 @@ for service_file in "$SYSTEMD_DIR"/wayvox*.service "$SYSTEMD_DIR"/wayvox*.servic
 	done <"$service_file" >"$tmp_service"
 	mv "$tmp_service" "$service_file"
 done
+shopt -u nullglob
 
 printf 'Wayvox service migration complete.\n'

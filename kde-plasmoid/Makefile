@@ -3,6 +3,8 @@
 
 SHELL := /bin/bash
 CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+PROJECT_DIR := $(realpath $(CWD)/..)
+PYTHON ?= $(shell command -v python3 2>/dev/null || printf '%s' python3)
 PLUGIN_ID = com.dmzoneill.wayvox
 LEGACY_PLUGIN_ID = com.whisper.npu
 INSTALL_DIR = ~/.local/share/plasma/plasmoids/$(PLUGIN_ID)
@@ -33,7 +35,7 @@ install-service:
 	mkdir -p $(SERVICE_DIR)
 	-systemctl --user disable --now whisper-npu-kde.service 2>/dev/null
 	rm -f $(SERVICE_DIR)/whisper-npu-kde.service
-	while IFS= read -r line; do printf '%s\n' "$${line//@WAYVOX_PROJECT_DIR@/$(CWD)}"; done < $(CWD)/wayvox-kde.service > $(SERVICE_DIR)/wayvox-kde.service
+	while IFS= read -r line; do line="$${line//@WAYVOX_PROJECT_DIR@/$(PROJECT_DIR)}"; printf '%s\n' "$${line//@WAYVOX_PYTHON@/$(PYTHON)}"; done < $(CWD)/wayvox-kde.service > $(SERVICE_DIR)/wayvox-kde.service
 	systemctl --user daemon-reload
 	systemctl --user enable wayvox-kde.service
 	systemctl --user start wayvox-kde.service
