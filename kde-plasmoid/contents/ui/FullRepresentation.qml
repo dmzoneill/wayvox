@@ -645,13 +645,13 @@ PlasmaExtras.Representation {
         var device = Plasmoid.configuration.device || "NPU"
         var home = root.homeDir
 
-        var serverOverrideDir = home + "/.config/systemd/user/whisper-server.service.d"
+        var serverOverrideDir = home + "/.config/systemd/user/wayvox-server.service.d"
         var serverOverride = "[Service]\nEnvironment=\"WHISPER_DEVICE=" + device + "\"\n"
 
         var cmd = "mkdir -p " + serverOverrideDir
         cmd += " && cat > " + serverOverrideDir + "/override.conf << 'SVREOF'\n" + serverOverride + "SVREOF"
         cmd += " && systemctl --user daemon-reload"
-        cmd += " && systemctl --user restart whisper-server.service"
+        cmd += " && systemctl --user restart wayvox-server.service"
 
         root.executable.execCallback(cmd, function(stdout, stderr, exitCode) {
             if (exitCode === 0) {

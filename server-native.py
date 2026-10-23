@@ -407,7 +407,7 @@ def _runtime_interface():
 def system_report():
     """Facts for the tray About dialog. Versions match this server process."""
     report = diagnostics.collect()
-    report["source"] = "whisper-server"
+    report["source"] = "wayvox-server"
     report["runtime"] = {
         "engine": ENGINE,
         "device": DEVICE,

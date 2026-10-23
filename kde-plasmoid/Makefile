@@ -27,24 +27,26 @@ uninstall:
 
 install-service:
 	mkdir -p $(SERVICE_DIR)
-	cp $(CWD)/whisper-npu-kde.service $(SERVICE_DIR)/
+	-systemctl --user disable --now whisper-npu-kde.service 2>/dev/null
+	rm -f $(SERVICE_DIR)/whisper-npu-kde.service
+	cp $(CWD)/wayvox-kde.service $(SERVICE_DIR)/
 	systemctl --user daemon-reload
-	systemctl --user enable whisper-npu-kde.service
-	systemctl --user start whisper-npu-kde.service
+	systemctl --user enable wayvox-kde.service
+	systemctl --user start wayvox-kde.service
 	@echo "D-Bus service installed and started."
 
 uninstall-service: disable-service
-	rm -f $(SERVICE_DIR)/whisper-npu-kde.service
+	rm -f $(SERVICE_DIR)/wayvox-kde.service
 	systemctl --user daemon-reload
 	@echo "D-Bus service uninstalled."
 
 enable-service:
-	systemctl --user enable whisper-npu-kde.service
-	systemctl --user start whisper-npu-kde.service
+	systemctl --user enable wayvox-kde.service
+	systemctl --user start wayvox-kde.service
 
 disable-service:
-	-systemctl --user stop whisper-npu-kde.service
-	-systemctl --user disable whisper-npu-kde.service
+	-systemctl --user stop wayvox-kde.service
+	-systemctl --user disable wayvox-kde.service
 
 dev: install install-service
 	@echo ""
@@ -87,21 +89,21 @@ preview-dbus: deps
 	@echo '    /com/whisper/LanguageBuddy com.whisper.LanguageBuddy.HandleTranscription \'
 	@echo '    string:"Hello this is a test transcription"'
 	@echo ""
-	python3 $(CWD)/whisper-npu-kde-service.py
+	python3 $(CWD)/wayvox-kde-service.py
 
 preview-stop:
 	-pkill -f "plasmawindowed $(PLUGIN_ID)" 2>/dev/null
 	-pkill -f "plasmoidviewer.*$(PLUGIN_ID)" 2>/dev/null
-	-pkill -f "whisper-npu-kde-service" 2>/dev/null
+	-pkill -f "wayvox-kde-service" 2>/dev/null
 	@echo "Preview processes stopped."
 
 # ------------------------------------------------------------------
 
 logs:
-	journalctl --user -f -u push-to-talk.service -u whisper-server.service
+	journalctl --user -f -u wayvox-push-to-talk.service -u wayvox-server.service
 
 logs-service:
-	journalctl --user -f -u whisper-npu-kde.service
+	journalctl --user -f -u wayvox-kde.service
 
 clean:
 	@echo "Nothing to clean."

@@ -356,7 +356,7 @@ def health():
 @app.route("/system", methods=["GET"])
 def system_info():
     report = diagnostics.collect()
-    report["source"] = "whisper-cpp-server"
+    report["source"] = "wayvox-cpp-server"
     report["libraries"]["whisper.cpp"] = _WHISPER_VERSION
     report["runtime"] = {
         "engine": "whisper.cpp",

@@ -229,7 +229,7 @@ class TestKdeServiceSmoke:
         spec = importlib.util.spec_from_file_location(
             "whisper_npu_kde_service",
             os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                         "kde-plasmoid", "whisper-npu-kde-service.py"),
+                          "kde-plasmoid", "wayvox-kde-service.py"),
             submodule_search_locations=[]
         )
         self.mod = importlib.util.module_from_spec(spec)

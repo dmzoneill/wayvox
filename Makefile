@@ -26,15 +26,19 @@ WHISPER_CPP_SRC     := $(PROJECT_DIR)/.whisper-cpp
 WHISPER_CPP_MODEL   ?= ggml-base.en.bin
 WHISPER_CPP_MODELS_DIR := $(HOME)/.cache/whisper
 
-SERVICE_FILES := $(SYSTEMD_DIR)/whisper-server.service \
-                 $(SYSTEMD_DIR)/whisper-cpp-server.service \
-                 $(SYSTEMD_DIR)/push-to-talk.service
+SERVICE_FILES := $(SYSTEMD_DIR)/wayvox-server.service \
+	             $(SYSTEMD_DIR)/wayvox-cpp-server.service \
+	             $(SYSTEMD_DIR)/wayvox-push-to-talk.service
+
+LEGACY_SERVICE_FILES := $(SYSTEMD_DIR)/whisper-server.service \
+	                    $(SYSTEMD_DIR)/whisper-cpp-server.service \
+	                    $(SYSTEMD_DIR)/push-to-talk.service
 
 WHISPER_MODELS_DIR := $(HOME)/.whisper/models
 HF_ORG := OpenVINO
 
 .PHONY: help install install-python install-system install-whisper-cpp \
-        install-services install-permissions install-models install-vocab enable start \
+        install-services migrate-services install-permissions install-models install-vocab enable start \
         stop restart status logs logs-server logs-cpp logs-ptt \
         test uninstall clean \
         extension extension-install extension-uninstall extension-enable \
@@ -223,16 +227,17 @@ install-vocab: ## Install default vocabulary.json when the user has none
 # Systemd services
 # ----------------------------------------------------------------------------
 
-install-services: ## Install systemd user service files (always regenerates)
-	@rm -f $(SERVICE_FILES)
-	@$(MAKE) $(SERVICE_FILES)
-	systemctl --user daemon-reload
+migrate-services: ## Migrate legacy user services, drop-ins, and enablement to Wayvox names
+	@$(MAKE) -B $(SERVICE_FILES)
+	@SYSTEMCTL=systemctl $(PROJECT_DIR)/scripts/migrate-services.sh "$(SYSTEMD_DIR)" "$(PROJECT_DIR)"
 
-$(SYSTEMD_DIR)/whisper-server.service:
+install-services: migrate-services ## Install Wayvox services and migrate legacy names
+
+$(SYSTEMD_DIR)/wayvox-server.service:
 	@mkdir -p $(SYSTEMD_DIR)
 	@printf '%s\n' \
 		'[Unit]' \
-		'Description=Whisper Speech-to-Text Server' \
+		'Description=Wayvox Speech-to-Text Server' \
 		'After=basic.target' \
 		'' \
 		'[Service]' \
@@ -251,7 +256,7 @@ $(SYSTEMD_DIR)/whisper-server.service:
 		'[Install]' \
 		'WantedBy=default.target' > $@
 
-$(SYSTEMD_DIR)/whisper-cpp-server.service:
+$(SYSTEMD_DIR)/wayvox-cpp-server.service:
 	@mkdir -p $(SYSTEMD_DIR)
 	@OPENVINO_LIBS=$$($(PYTHON) -c "import openvino, os; print(os.path.join(os.path.dirname(openvino.__file__), 'libs'))" 2>/dev/null || echo ""); \
 	LD_PATH="$${OPENVINO_LIBS:+$${OPENVINO_LIBS}:}/usr/local/lib64:/usr/local/lib"; \
@@ -264,7 +269,7 @@ $(SYSTEMD_DIR)/whisper-cpp-server.service:
 	fi; \
 	printf '%s\n' \
 		'[Unit]' \
-		'Description=Whisper.cpp Speech-to-Text Server (NPU/CPU)' \
+		'Description=Wayvox Whisper.cpp Server (NPU/CPU)' \
 		'After=basic.target' \
 		'' \
 		'[Service]' \
@@ -278,19 +283,19 @@ $(SYSTEMD_DIR)/whisper-cpp-server.service:
 		'[Install]' \
 		'WantedBy=default.target' > $@
 
-$(SYSTEMD_DIR)/push-to-talk.service:
+$(SYSTEMD_DIR)/wayvox-push-to-talk.service:
 	@mkdir -p $(SYSTEMD_DIR)
 	@printf '%s\n' \
 		'[Unit]' \
-		'Description=Push-to-Talk Voice Dictation' \
-		'After=whisper-server.service' \
-		'Wants=whisper-server.service' \
+		'Description=Wayvox Push-to-Talk Voice Dictation' \
+		'After=wayvox-server.service' \
+		'Wants=wayvox-server.service' \
 		'' \
 		'[Service]' \
 		'Type=simple' \
 		'Environment=XDG_SESSION_TYPE=wayland' \
 		'Environment=YDOTOOL_SOCKET=/tmp/.ydotool_socket' \
-		'ExecStartPre=/bin/bash -c '"'"'i=0; while [ $$i -lt 60 ]; do curl -sf http://127.0.0.1:5000/health >/dev/null 2>&1 && exit 0; sleep 1; i=$$((i+1)); done; echo whisper-server not ready after 60s; exit 1'"'"'' \
+		'ExecStartPre=/bin/bash -c '"'"'i=0; while [ $$i -lt 60 ]; do curl -sf http://127.0.0.1:5000/health >/dev/null 2>&1 && exit 0; sleep 1; i=$$((i+1)); done; echo wayvox-server not ready after 60s; exit 1'"'"'' \
 		'ExecStart=/usr/bin/sg input -c '"'"'$(PYTHON) $(PROJECT_DIR)/push-to-talk.py --key KEY_RIGHTCTRL --backend openvino'"'"'' \
 		'Restart=on-failure' \
 		'RestartSec=3' \
@@ -302,41 +307,41 @@ $(SYSTEMD_DIR)/push-to-talk.service:
 # Service management
 # ----------------------------------------------------------------------------
 
-enable: ## Enable services (whisper-server, push-to-talk; optionally whisper-cpp-server)
-	systemctl --user enable whisper-server.service
-	systemctl --user enable push-to-talk.service
-	@printf 'Enable whisper-cpp-server (port $(WHISPER_CPP_PORT), GGML encoder-only fallback)? [y/N] '; \
+enable: ## Enable Wayvox services (server, dictation; optionally C++ fallback)
+	systemctl --user enable wayvox-server.service
+	systemctl --user enable wayvox-push-to-talk.service
+	@printf 'Enable wayvox-cpp-server (port $(WHISPER_CPP_PORT), GGML encoder-only fallback)? [y/N] '; \
 	read ans; \
 	case "$$ans" in \
-		[Yy]*) systemctl --user enable whisper-cpp-server.service; echo "whisper-cpp-server enabled" ;; \
-		*)     systemctl --user disable whisper-cpp-server.service 2>/dev/null; echo "whisper-cpp-server skipped" ;; \
+		[Yy]*) systemctl --user enable wayvox-cpp-server.service; echo "wayvox-cpp-server enabled" ;; \
+		*)     systemctl --user disable wayvox-cpp-server.service 2>/dev/null; echo "wayvox-cpp-server skipped" ;; \
 	esac
 
-start: ## Start services (whisper-server, push-to-talk; optionally whisper-cpp-server)
-	systemctl --user start whisper-server.service
-	@if systemctl --user is-enabled whisper-cpp-server.service >/dev/null 2>&1; then \
-		systemctl --user start whisper-cpp-server.service; \
+start: ## Start Wayvox services (server, dictation; optionally C++ fallback)
+	systemctl --user start wayvox-server.service
+	@if systemctl --user is-enabled wayvox-cpp-server.service >/dev/null 2>&1; then \
+		systemctl --user start wayvox-cpp-server.service; \
 	fi
-	@echo "Waiting for whisper-server to load model..."
+	@echo "Waiting for Wayvox server to load model..."
 	@for i in $$(seq 1 60); do curl -sf http://127.0.0.1:5000/health >/dev/null 2>&1 && break; sleep 1; done
-	systemctl --user start push-to-talk.service
+	systemctl --user start wayvox-push-to-talk.service
 
 stop: ## Stop all services
-	-systemctl --user stop push-to-talk.service
-	-systemctl --user stop whisper-server.service
-	-systemctl --user stop whisper-cpp-server.service
+	-systemctl --user stop wayvox-push-to-talk.service
+	-systemctl --user stop wayvox-server.service
+	-systemctl --user stop wayvox-cpp-server.service
 
 restart: stop start ## Restart all services
 
 status: ## Show service status
-	@echo "=== whisper-server (server-native.py :5000) ==="
-	@systemctl --user status whisper-server.service --no-pager 2>/dev/null || echo "  not installed"
+	@echo "=== wayvox-server (server-native.py :5000) ==="
+	@systemctl --user status wayvox-server.service --no-pager 2>/dev/null || echo "  not installed"
 	@echo ""
-	@echo "=== whisper-cpp-server (server-whisper-cpp.py :$(WHISPER_CPP_PORT)) ==="
-	@systemctl --user status whisper-cpp-server.service --no-pager 2>/dev/null || echo "  not installed"
+	@echo "=== wayvox-cpp-server (server-whisper-cpp.py :$(WHISPER_CPP_PORT)) ==="
+	@systemctl --user status wayvox-cpp-server.service --no-pager 2>/dev/null || echo "  not installed"
 	@echo ""
-	@echo "=== push-to-talk ==="
-	@systemctl --user status push-to-talk.service --no-pager 2>/dev/null || echo "  not installed"
+	@echo "=== wayvox-push-to-talk ==="
+	@systemctl --user status wayvox-push-to-talk.service --no-pager 2>/dev/null || echo "  not installed"
 	@echo ""
 	@echo "=== ydotoold ==="
 	@systemctl status ydotool.service --no-pager 2>/dev/null || echo "  not installed"
@@ -348,35 +353,34 @@ status: ## Show service status
 
 logs: logs-server logs-cpp logs-ptt ## Show logs for all services
 
-logs-server: ## Show whisper-server logs
-	journalctl --user -u whisper-server.service --no-pager -n 30
+logs-server: ## Show Wayvox server logs
+	journalctl --user -u wayvox-server.service --no-pager -n 30
 
-logs-cpp: ## Show whisper-cpp-server logs
-	journalctl --user -u whisper-cpp-server.service --no-pager -n 30
+logs-cpp: ## Show Wayvox C++ server logs
+	journalctl --user -u wayvox-cpp-server.service --no-pager -n 30
 
-logs-ptt: ## Show push-to-talk logs
-	journalctl --user -u push-to-talk.service --no-pager -n 30
+logs-ptt: ## Show Wayvox push-to-talk logs
+	journalctl --user -u wayvox-push-to-talk.service --no-pager -n 30
 
 # ----------------------------------------------------------------------------
 # Health check
 # ----------------------------------------------------------------------------
 
 test: ## Health check against running servers
-	@echo "--- whisper-server (:5000) ---"
+	@echo "--- wayvox-server (:5000) ---"
 	@curl -sf http://127.0.0.1:5000/models 2>/dev/null | $(PYTHON) -m json.tool || echo "  not reachable"
 	@echo ""
-	@echo "--- whisper-cpp-server (:$(WHISPER_CPP_PORT)) ---"
+	@echo "--- wayvox-cpp-server (:$(WHISPER_CPP_PORT)) ---"
 	@curl -sf http://127.0.0.1:$(WHISPER_CPP_PORT)/health 2>/dev/null | $(PYTHON) -m json.tool || echo "  not reachable"
 
 # ----------------------------------------------------------------------------
 # Uninstall
 # ----------------------------------------------------------------------------
 
-uninstall: stop ## Stop and remove all services
-	-systemctl --user disable whisper-server.service 2>/dev/null
-	-systemctl --user disable whisper-cpp-server.service 2>/dev/null
-	-systemctl --user disable push-to-talk.service 2>/dev/null
-	rm -f $(SERVICE_FILES)
+uninstall: stop ## Stop and remove Wayvox services
+	-systemctl --user disable --now wayvox-server.service wayvox-cpp-server.service wayvox-push-to-talk.service 2>/dev/null
+	-systemctl --user disable --now whisper-server.service whisper-cpp-server.service push-to-talk.service 2>/dev/null
+	rm -f $(SERVICE_FILES) $(LEGACY_SERVICE_FILES)
 	systemctl --user daemon-reload
 
 # ----------------------------------------------------------------------------

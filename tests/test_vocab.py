@@ -179,7 +179,7 @@ def test_npu_reject_log_names_upgrade(vocab_path, monkeypatch, caplog):
     assert warnings[0].startswith("Failover:")
     assert "2026.4.1" in warnings[0]
     assert "regex" in warnings[0].lower()
-    assert "restart whisper-server" in warnings[0]
+    assert "restart wayvox-server" in warnings[0]
     assert vocab.bias_status()["mode"] == "regex"
     assert vocab.bias_status()["failover"] == ["unsupported"]
 

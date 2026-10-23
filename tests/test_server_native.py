@@ -440,7 +440,7 @@ class TestHealthRoute:
         resp = client.get("/system")
         assert resp.status_code == 200
         data = resp.get_json()
-        assert data["source"] == "whisper-server"
+        assert data["source"] == "wayvox-server"
         assert data["runtime"]["engine"]
         assert data["runtime"]["device"]
         assert "OpenVINO GenAI WhisperPipeline" in data["runtime"]["interface"]

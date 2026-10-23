@@ -413,7 +413,7 @@ const WhisperIndicator = GObject.registerClass(
       )
       this._hfClient = new HuggingFaceClient()
 
-      const iconPath = GLib.build_filenamev([extension.path, 'icons', 'whisper-npu-symbolic.svg'])
+      const iconPath = GLib.build_filenamev([extension.path, 'icons', 'wayvox-symbolic.svg'])
       const gicon = Gio.icon_new_for_string(iconPath)
       const icon = new St.Icon({
         gicon,
@@ -1277,10 +1277,10 @@ const WhisperIndicator = GObject.registerClass(
       const device = this._settings.get_string('device')
 
       try {
-        await writeServiceOverride('whisper-server.service', {
+        await writeServiceOverride('wayvox-server.service', {
           WHISPER_DEVICE: device
         })
-        await restartService('whisper-server.service')
+        await restartService('wayvox-server.service')
 
         this._restartServerItem.label.set_text(_('Server restarted'))
         Main.notify(_('Wayvox'), _('Server restarted'))

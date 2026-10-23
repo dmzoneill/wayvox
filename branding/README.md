@@ -30,7 +30,16 @@ full-color product mark.
 
 ## Compatibility note
 
-This is a product rename, not a breaking runtime migration. Existing service
-names, environment variables, extension IDs, config paths, and model paths keep
-their `whisper-*` names so installed systems and existing settings continue to
-work.
+This is a product rename with an explicit service migration. New user services
+use `wayvox-*`; `make install-services` disables and removes old service units.
+Environment variables, extension IDs, config paths, and model paths keep their
+technical names so installed settings and model data remain usable.
+
+## Repository assets
+
+- `wayvox-mark.svg`: square avatar, favicon, app icon, and desktop identity mark.
+- `wayvox-social-preview.svg`: 1200x630 GitHub social preview image.
+
+Upload `wayvox-mark.svg` as the GitHub repository avatar and
+`wayvox-social-preview.svg` as the social preview image. Keep both files in this
+repository so future updates stay reproducible.

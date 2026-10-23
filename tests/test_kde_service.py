@@ -1,4 +1,4 @@
-"""Tests for the KDE D-Bus overlay service (whisper-npu-kde-service.py).
+"""Tests for the KDE D-Bus overlay service (wayvox-kde-service.py).
 
 Mocks dbus before importing the module so tests work without a session bus.
 Uses real PyQt6 for widget tests (QApplication created once per session).
@@ -54,7 +54,7 @@ sys.modules["gi.repository"] = mock_gi.repository
 
 _MODULE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "kde-plasmoid", "whisper-npu-kde-service.py"
+    "kde-plasmoid", "wayvox-kde-service.py"
 )
 
 spec = importlib.util.spec_from_file_location("whisper_npu_kde_service", _MODULE_PATH)

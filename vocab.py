@@ -619,7 +619,7 @@ def _pipeline_kwargs(device):
                 "Failover: could not create Whisper cache %s (%s). "
                 "Compiling without CACHE_DIR. The next start will compile again. "
                 "Action: make the directory writable, or set WHISPER_CACHE_DIR to one that is, "
-                "then restart whisper-server.",
+                "then restart wayvox-server.",
                 cache,
                 exc,
             )
@@ -677,7 +677,7 @@ def load_whisper_pipeline(factory, model_path, device):
                 "Prompt slot is 447 tokens, so initial_prompt and hotwords are sent. "
                 "OpenVINO GenAI %s. Compiled model cache: %s. "
                 "The first start after enabling this compiles for a few minutes. Later starts reuse the cache. "
-                "Set WHISPER_NPU_WORD_TIMESTAMPS=0 and restart whisper-server to go back to the 4 token slot.",
+                "Set WHISPER_NPU_WORD_TIMESTAMPS=0 and restart wayvox-server to go back to the 4 token slot.",
                 _installed_genai_version(),
                 kwargs.get("CACHE_DIR") or "(disabled)",
             )
@@ -685,7 +685,7 @@ def load_whisper_pipeline(factory, model_path, device):
             log.info(
                 "NPU Whisper pipeline is %s. word_timestamps is off, so the prompt slot stays 4 tokens. "
                 "A term list fails over to regex. OpenVINO GenAI %s. "
-                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart whisper-server. "
+                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart wayvox-server. "
                 "make install writes that default.",
                 _pipeline_mode,
                 _installed_genai_version(),
@@ -709,7 +709,7 @@ def _log_pipeline_failover(exc):
         "Loaded the default pipeline instead. "
         "GenAI 2025.4 defaults NPU to a static pipeline that rejects initial_prompt and hotwords. "
         "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, "
-        "then restart whisper-server. That release uses the stateful pipeline, which accepts decoder bias. "
+        "then restart wayvox-server. That release uses the stateful pipeline, which accepts decoder bias. "
         "Regex replacements in %s still apply. Installed openvino-genai is %s.",
         _one_line(exc),
         default_path(),
@@ -733,7 +733,7 @@ def _log_word_timestamps_failover(exc):
         "Failover: WhisperPipeline rejected word_timestamps (%s). "
         "The NPU prompt slot stays 4 tokens, so a term list will not fit. "
         "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, "
-        "then restart whisper-server. Set WHISPER_NPU_WORD_TIMESTAMPS=0 to skip this compile option. "
+        "then restart wayvox-server. Set WHISPER_NPU_WORD_TIMESTAMPS=0 to skip this compile option. "
         "Regex replacements in %s still apply. Installed openvino-genai is %s."
         % (_one_line(exc), default_path(), _installed_genai_version()),
     )
@@ -745,7 +745,7 @@ def _log_cache_failover(exc):
         ("pipeline", ("CACHE_DIR",)),
         "Failover: WhisperPipeline rejected CACHE_DIR (%s). "
         "Loaded without a compiled-model cache, so the next start compiles again. "
-        "Action: unset WHISPER_CACHE_DIR or point it at a writable directory, then restart whisper-server. "
+        "Action: unset WHISPER_CACHE_DIR or point it at a writable directory, then restart wayvox-server. "
         "Installed openvino-genai is %s."
         % (_one_line(exc), _installed_genai_version()),
     )
@@ -795,13 +795,13 @@ def _log_failover(reason, dropped, exc):
             action = (
                 "word_timestamps=True was compiled and the slot is still 4 tokens. "
                 "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
-                "Set WHISPER_DEVICE=GPU and restart whisper-server to send the full term list. "
+                "Set WHISPER_DEVICE=GPU and restart wayvox-server to send the full term list. "
                 "This OpenVINO build did not raise whisper_max_prompt_size. "
             )
         else:
             action = (
                 "word_timestamps was not compiled, so the slot stayed 4 tokens. "
-                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart whisper-server. "
+                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart wayvox-server. "
                 "make install writes that into the user service. "
                 "The flag passes word_timestamps=True to the WhisperPipeline constructor and compiles a 447 token slot. "
                 "Do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
@@ -825,7 +825,7 @@ def _log_failover(reason, dropped, exc):
             "Failover: this OpenVINO build rejected %s (%s). "
             "Transcription continues without decoder bias. "
             "Regex replacements in %s still correct misheard terms. "
-            "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, then restart whisper-server. "
+            "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, then restart wayvox-server. "
             "GenAI 2025.4 uses a static NPU pipeline that rejects initial_prompt and hotwords. "
             "GenAI 2026.4 accepts those arguments. "
             "Installed openvino-genai is %s. "

@@ -21,7 +21,7 @@ MouseArea {
 
     Kirigami.Icon {
         anchors.fill: parent
-        source: Qt.resolvedUrl("../icons/whisper-npu.svg")
+        source: Qt.resolvedUrl("../icons/wayvox.svg")
         active: compactRoot.containsMouse
     }
 }

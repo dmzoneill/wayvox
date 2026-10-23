@@ -24,7 +24,7 @@ PlasmoidItem {
     toolTipMainText: "Wayvox"
     toolTipSubText: connected ? "Connected | Model: " + currentModel : "Disconnected"
 
-    Plasmoid.icon: "whisper-npu"
+    Plasmoid.icon: "wayvox"
 
     compactRepresentation: CompactRepresentation {}
 

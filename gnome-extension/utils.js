@@ -337,7 +337,7 @@ export async function restartService (serviceName) {
 export async function writePttServiceOverride (envVars, pttArgs) {
   const overrideDir = GLib.build_filenamev([
     GLib.get_home_dir(), '.config', 'systemd', 'user',
-    'push-to-talk.service.d'
+    'wayvox-push-to-talk.service.d'
   ])
   const overridePath = GLib.build_filenamev([overrideDir, 'override.conf'])
 

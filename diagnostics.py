@@ -292,7 +292,7 @@ def bias_action(bias):
             "Failover: this OpenVINO build rejected decoder bias "
             "(initial_prompt and hotwords). "
             "Action: upgrade openvino, openvino-genai, and openvino-tokenizers "
-            "to 2026.4.1 or newer, then restart whisper-server. "
+            "to 2026.4.1 or newer, then restart wayvox-server. "
             "GenAI 2025.4 uses a static NPU pipeline that rejects those arguments. "
             "GenAI 2026.4 accepts them. Regex replacements still correct misheard terms."
         )
@@ -301,12 +301,12 @@ def bias_action(bias):
             slot = (
                 "word_timestamps=True was compiled and the slot is still 4 tokens. "
                 "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
-                "Set WHISPER_DEVICE=GPU and restart whisper-server to send the full term list. "
+                "Set WHISPER_DEVICE=GPU and restart wayvox-server to send the full term list. "
             )
         else:
             slot = (
                 "word_timestamps was not compiled, so the slot stayed 4 tokens. "
-                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart whisper-server. "
+                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart wayvox-server. "
                 "make install writes that into the user service. "
                 "The flag passes word_timestamps=True to the WhisperPipeline constructor and compiles a 447 token slot. "
                 "Do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
@@ -357,25 +357,25 @@ def health_hints(report):
     if has_pci_npu and not vpu.get("loaded"):
         hints.append(
             "NPU PCI device is present and kernel module intel_vpu is not loaded. "
-            "Action: load the NPU driver, then restart whisper-server."
+            "Action: load the NPU driver, then restart wayvox-server."
         )
     if has_pci_npu and ov.get("importable") and not has_ov_npu:
         hints.append(
             "PCI shows an NPU but OpenVINO did not list an NPU device. "
             "Action: confirm this Python's OpenVINO build includes the NPU plugin, "
-            "then restart whisper-server."
+            "then restart wayvox-server."
         )
     libs = report.get("libraries") or {}
     runtime = report.get("runtime") or {}
     if runtime.get("engine") == "openvino" and not libs.get("openvino-genai"):
         hints.append(
             "The server selected OpenVINO but openvino-genai is not installed in that process. "
-            "Action: install openvino, openvino-genai, and openvino-tokenizers, then restart whisper-server."
+            "Action: install openvino, openvino-genai, and openvino-tokenizers, then restart wayvox-server."
         )
     if runtime.get("engine") == "openvino" and not libs.get("openvino"):
         hints.append(
             "The server selected OpenVINO but the openvino package version could not be read. "
-            "Action: reinstall the OpenVINO wheel in the whisper-server environment and restart it."
+            "Action: reinstall the OpenVINO wheel in the Wayvox environment and restart it."
         )
     return hints
 
@@ -414,7 +414,7 @@ def format_report(report):
     if not runtime:
         lines.append("  Server did not answer. Inference engine, model, and bias state are unknown.")
         lines.append(
-            "  Action: start whisper-server, confirm the tray host and port, then reopen About. "
+            "  Action: start wayvox-server, confirm the tray host and port, then reopen About. "
             "Library versions below are this Python, not the service."
         )
     else:
@@ -445,7 +445,7 @@ def format_report(report):
             elif bias.get("word_timestamps_requested"):
                 compile_state = "word_timestamps enabled, compiles on first model load"
             elif str(bias.get("device") or "").upper().startswith("NPU"):
-                compile_state = "off, 4 token slot. Set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart whisper-server"
+                compile_state = "off, 4 token slot. Set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart wayvox-server"
             else:
                 compile_state = ""
             if compile_state:

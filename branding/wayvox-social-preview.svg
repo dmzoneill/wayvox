@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Wayvox social preview</title>
+  <desc id="desc">Wayvox, private voice and local power, on-device dictation for Linux.</desc>
+  <defs>
+    <linearGradient id="glow" x1="110" y1="90" x2="1080" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17263C"/>
+      <stop offset="1" stop-color="#101827"/>
+    </linearGradient>
+    <linearGradient id="signal" x1="98" y1="92" x2="278" y2="272" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5DE4FF"/>
+      <stop offset="0.56" stop-color="#5DE4FF"/>
+      <stop offset="1" stop-color="#FF8066"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#101827"/>
+  <circle cx="1020" cy="-20" r="360" fill="#18314B" opacity=".42"/>
+  <circle cx="1120" cy="560" r="260" fill="#3B2330" opacity=".34"/>
+  <rect x="54" y="54" width="1092" height="522" rx="38" fill="url(#glow)" stroke="#2A4058" stroke-width="2"/>
+  <g transform="translate(126 174)">
+    <rect width="220" height="220" rx="54" fill="#101827" stroke="#2A4058" stroke-width="2"/>
+    <path d="M42 48 81 159c4 11 12 16 28 16s24-5 28-16l39-111" fill="none" stroke="url(#signal)" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M110 68v81" stroke="#F4F7FB" stroke-width="10" stroke-linecap="round" opacity=".96"/>
+    <circle cx="110" cy="54" r="8" fill="#F4F7FB"/>
+  </g>
+  <text x="406" y="270" fill="#F4F7FB" font-family="Inter,Segoe UI,sans-serif" font-size="96" font-weight="750" letter-spacing="-3">Wayvox</text>
+  <text x="412" y="344" fill="#5DE4FF" font-family="Inter,Segoe UI,sans-serif" font-size="32" font-weight="600">Private voice, local power.</text>
+  <text x="412" y="414" fill="#C6D0DD" font-family="Inter,Segoe UI,sans-serif" font-size="27">On-device dictation for Linux</text>
+  <rect x="412" y="466" width="286" height="4" rx="2" fill="#FF8066"/>
+</svg>
