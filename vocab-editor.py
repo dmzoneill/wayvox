@@ -11,12 +11,15 @@ import vocab
 
 
 def _buffer_text(buf):
+    """Handle buffer text."""
     return buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
 
 
 def main():
+    """Main."""
     try:
         import gi
+
         gi.require_version("Gtk", "4.0")
         from gi.repository import Gtk
     except Exception as exc:
@@ -25,10 +28,14 @@ def main():
         return 1
 
     class Editor(Gtk.Application):
+        """Editor."""
+
         def __init__(self):
+            """Handle init  ."""
             super().__init__(application_id="one.whisper.npu.VocabEditor")
 
         def do_activate(self):
+            """Do activate."""
             window = Gtk.ApplicationWindow(application=self, title="Whisper Vocabulary")
             window.set_default_size(760, 700)
 
@@ -40,7 +47,13 @@ def main():
             window.set_child(root)
 
             header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-            header.append(Gtk.Label(label="Bias Whisper and fix mishears", xalign=0, hexpand=True))
+            header.append(
+                Gtk.Label(
+                    label="Bias Whisper and fix mishears",
+                    xalign=0,
+                    hexpand=True,
+                ),
+            )
             self.enabled = Gtk.Switch(valign=Gtk.Align.CENTER)
             header.append(self.enabled)
             root.append(header)
@@ -76,7 +89,13 @@ def main():
             reset_btn = Gtk.Button(label="Reset to defaults")
             close_btn = Gtk.Button(label="Close")
             save_btn.connect("clicked", self._save)
-            reset_btn.connect("clicked", lambda *_: self._load(vocab.default_config(), "Defaults loaded. Save to keep them."))
+            reset_btn.connect(
+                "clicked",
+                lambda *_: self._load(
+                    vocab.default_config(),
+                    "Defaults loaded. Save to keep them.",
+                ),
+            )
             close_btn.connect("clicked", lambda *_: window.close())
             buttons.append(save_btn)
             buttons.append(reset_btn)
@@ -90,6 +109,7 @@ def main():
             window.present()
 
         def _scrolled(self, buf):
+            """Handle scrolled."""
             view = Gtk.TextView(buffer=buf, monospace=True, wrap_mode=Gtk.WrapMode.NONE)
             view.set_left_margin(6)
             view.set_top_margin(6)
@@ -100,13 +120,17 @@ def main():
             return scrolled
 
         def _load(self, config, status):
+            """Handle load."""
             self.enabled.set_active(bool(config.get("enabled", True)))
             self.preamble.set_text(config.get("preamble") or vocab.DEFAULT_PREAMBLE)
             self.terms_buf.set_text("\n".join(config.get("terms") or []))
-            self.rules_buf.set_text(vocab.rules_to_text(config.get("replacements") or []))
+            self.rules_buf.set_text(
+                vocab.rules_to_text(config.get("replacements") or []),
+            )
             self.status.set_label(status)
 
         def _save(self, *_args):
+            """Handle save."""
             rules, parse_errors = vocab.parse_rules(_buffer_text(self.rules_buf))
             config = {
                 "enabled": self.enabled.get_active(),
@@ -124,7 +148,7 @@ def main():
                 self.status.set_label(f"Not saved. {exc}")
                 return
             self.status.set_label(
-                f"Saved {len(config['terms'])} terms and {len(config['replacements'])} rules to {vocab.default_path()}"
+                f"Saved {len(config['terms'])} terms and {len(config['replacements'])} rules to {vocab.default_path()}",
             )
 
     app = Editor()

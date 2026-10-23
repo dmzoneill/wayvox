@@ -4,16 +4,23 @@ import os
 
 import diagnostics
 
-
-SAMPLE_LSPCI = """
-00:02.0 "VGA compatible controller [0300]" "Intel Corporation [8086]" "Meteor Lake-P [Intel Arc Graphics] [7d55]" -r08 "Lenovo [17aa]" "Device [2317]"
-00:0b.0 "Processing accelerators [1200]" "Intel Corporation [8086]" "Meteor Lake NPU [7d1d]" -r01 "Lenovo [17aa]" "Device [2317]"
-01:00.0 "3D controller [0302]" "NVIDIA Corporation [10de]" "AD107M [GeForce RTX 4060 Max-Q / Mobile] [28a0]" -ra1 "Lenovo [17aa]" "Device [2317]"
-02:00.0 "Ethernet controller [0200]" "Intel Corporation [8086]" "Device [5502]"
-"""
+SAMPLE_LSPCI = (
+    "\n"
+    '00:02.0 "VGA compatible controller [0300]" "Intel Corporation [8086]" '
+    '"Meteor Lake-P [Intel Arc Graphics] [7d55]" '
+    '-r08 "Lenovo [17aa]" "Device [2317]"\n'
+    '00:0b.0 "Processing accelerators [1200]" "Intel Corporation [8086]" '
+    '"Meteor Lake NPU [7d1d]" -r01 "Lenovo [17aa]" "Device [2317]"\n'
+    '01:00.0 "3D controller [0302]" "NVIDIA Corporation [10de]" '
+    '"AD107M [GeForce RTX 4060 Max-Q / Mobile] [28a0]" '
+    '-ra1 "Lenovo [17aa]" "Device [2317]"\n'
+    '02:00.0 "Ethernet controller [0200]" "Intel Corporation [8086]" '
+    '"Device [5502]"\n'
+)
 
 
 def test_parse_lspci_keeps_gpu_and_npu():
+    """Test that parse lspci keeps gpu and npu."""
     rows = diagnostics.parse_lspci_mm(SAMPLE_LSPCI)
     kinds = [(row["kind"], row["slot"]) for row in rows]
     assert kinds == [("GPU", "00:02.0"), ("NPU", "00:0b.0"), ("GPU", "01:00.0")]
@@ -23,6 +30,7 @@ def test_parse_lspci_keeps_gpu_and_npu():
 
 
 def test_pci_sysfs_class_codes(tmp_path):
+    """Test that pci sysfs class codes."""
     npu = tmp_path / "0000:00:0b.0"
     gpu = tmp_path / "0000:00:02.0"
     net = tmp_path / "0000:02:00.0"
@@ -43,6 +51,7 @@ def test_pci_sysfs_class_codes(tmp_path):
 
 
 def test_format_report_names_devices_library_and_failover():
+    """Test that format report names devices library and failover."""
     report = {
         "app": {"name": "Wayvox", "version": "0.0.2"},
         "source": "wayvox-server",
@@ -61,8 +70,16 @@ def test_format_report_names_devices_library_and_failover():
             "devices": [
                 {
                     "id": "NPU",
-                    "properties": {"FULL_DEVICE_NAME": "Intel AI Boost", "NPU_DRIVER_VERSION": "1.2"},
-                    "plugins": {"NPU": {"description": "NPU plugin", "build": "2026.4.1"}},
+                    "properties": {
+                        "FULL_DEVICE_NAME": "Intel AI Boost",
+                        "NPU_DRIVER_VERSION": "1.2",
+                    },
+                    "plugins": {
+                        "NPU": {
+                            "description": "NPU plugin",
+                            "build": "2026.4.1",
+                        },
+                    },
                 },
                 {
                     "id": "GPU",
@@ -72,9 +89,24 @@ def test_format_report_names_devices_library_and_failover():
             ],
         },
         "pci": [
-            {"kind": "GPU", "slot": "00:02.0", "vendor": "Intel", "device": "Arc Graphics"},
-            {"kind": "NPU", "slot": "00:0b.0", "vendor": "Intel", "device": "Meteor Lake NPU"},
-            {"kind": "GPU", "slot": "01:00.0", "vendor": "NVIDIA", "device": "RTX 4060"},
+            {
+                "kind": "GPU",
+                "slot": "00:02.0",
+                "vendor": "Intel",
+                "device": "Arc Graphics",
+            },
+            {
+                "kind": "NPU",
+                "slot": "00:0b.0",
+                "vendor": "Intel",
+                "device": "Meteor Lake NPU",
+            },
+            {
+                "kind": "GPU",
+                "slot": "01:00.0",
+                "vendor": "NVIDIA",
+                "device": "RTX 4060",
+            },
         ],
         "modules": {
             "intel_vpu": {"loaded": True, "version": "1.2"},
@@ -115,29 +147,36 @@ def test_format_report_names_devices_library_and_failover():
 
 
 def test_bias_action_names_upgrade_for_unsupported_npu():
-    text = diagnostics.bias_action({
-        "mode": "regex",
-        "device": "NPU",
-        "failover": ["unsupported"],
-        "rejected": ["initial_prompt", "hotwords"],
-    })
+    """Test that bias action names upgrade for unsupported npu."""
+    text = diagnostics.bias_action(
+        {
+            "mode": "regex",
+            "device": "NPU",
+            "failover": ["unsupported"],
+            "rejected": ["initial_prompt", "hotwords"],
+        },
+    )
     assert "2026.4.1" in text
     assert "restart wayvox-server" in text
 
 
 def test_missing_npu_plugin_hint():
-    hints = diagnostics.health_hints({
-        "openvino": {"importable": True, "devices": [{"id": "CPU"}]},
-        "pci": [{"kind": "NPU", "slot": "00:0b.0"}],
-        "modules": {"intel_vpu": {"loaded": False}},
-        "libraries": {"openvino": "2026.4.1", "openvino-genai": "2026.4.1"},
-        "runtime": {"engine": "openvino"},
-    })
+    """Test that missing npu plugin hint."""
+    hints = diagnostics.health_hints(
+        {
+            "openvino": {"importable": True, "devices": [{"id": "CPU"}]},
+            "pci": [{"kind": "NPU", "slot": "00:0b.0"}],
+            "modules": {"intel_vpu": {"loaded": False}},
+            "libraries": {"openvino": "2026.4.1", "openvino-genai": "2026.4.1"},
+            "runtime": {"engine": "openvino"},
+        },
+    )
     assert any("intel_vpu" in hint for hint in hints)
     assert any("did not list an NPU" in hint for hint in hints)
 
 
 def test_collect_has_report_sections():
+    """Test that collect has report sections."""
     report = diagnostics.collect()
     assert report["app"]["version"]
     assert "python" in report

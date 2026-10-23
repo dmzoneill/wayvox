@@ -17,6 +17,7 @@ import diagnostics
 
 
 def fetch_report(url):
+    """Fetch report."""
     request = urllib.request.Request(url, headers={"Accept": "application/json"})
     with urllib.request.urlopen(request, timeout=4) as response:
         payload = json.loads(response.read().decode())
@@ -29,9 +30,16 @@ def fetch_report(url):
 
 
 def report_for(url):
+    """Report for."""
     try:
         return fetch_report(url)
-    except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError, OSError) as exc:
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        ValueError,
+        json.JSONDecodeError,
+        OSError,
+    ) as exc:
         report = diagnostics.collect()
         report["source"] = "local"
         report["warning"] = (
@@ -44,6 +52,7 @@ def report_for(url):
 
 
 def run_dialog(text):
+    """Run dialog."""
     import gi
 
     gi.require_version("Gtk", "4.0")
@@ -51,10 +60,14 @@ def run_dialog(text):
     from gi.repository import Gdk, Gtk
 
     class About(Gtk.Application):
+        """About."""
+
         def __init__(self):
+            """Handle init  ."""
             super().__init__(application_id="one.whisper.npu.About")
 
         def do_activate(self):
+            """Do activate."""
             window = Gtk.ApplicationWindow(application=self, title="About Wayvox")
             window.set_default_size(740, 580)
 
@@ -65,14 +78,16 @@ def run_dialog(text):
             root.set_margin_end(12)
             window.set_child(root)
 
-            root.append(Gtk.Label(
-                label=(
-                    "Detected NPU and GPUs, the library talking to the inference device, "
-                    "and the versions to check when dictation fails."
+            root.append(
+                Gtk.Label(
+                    label=(
+                        "Detected NPU and GPUs, the library talking to the inference device, "
+                        "and the versions to check when dictation fails."
+                    ),
+                    wrap=True,
+                    xalign=0,
                 ),
-                wrap=True,
-                xalign=0,
-            ))
+            )
 
             buf = Gtk.TextBuffer()
             buf.set_text(text)
@@ -99,6 +114,7 @@ def run_dialog(text):
             status = Gtk.Label(label="", xalign=0, hexpand=True)
 
             def copy(_button):
+                """Copy."""
                 display = Gdk.Display.get_default()
                 if display is None:
                     status.set_label("No display clipboard.")
@@ -119,6 +135,7 @@ def run_dialog(text):
 
 
 def main(argv=None):
+    """Main."""
     parser = argparse.ArgumentParser(description="Wayvox system information dialog")
     parser.add_argument("--url", default="", help="GET this /system URL")
     parser.add_argument("--host", default="127.0.0.1")

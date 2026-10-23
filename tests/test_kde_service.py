@@ -27,9 +27,13 @@ _real_dbus_mainloop_glib = sys.modules.pop("dbus.mainloop.glib", None)
 
 mock_dbus = MagicMock()
 # dbus.service.Object must be a real class so LanguageBuddyService can inherit
-mock_dbus_service_Object = type("Object", (), {
-    "__init__": lambda self, *a, **kw: None,
-})
+mock_dbus_service_Object = type(
+    "Object",
+    (),
+    {
+        "__init__": lambda self, *a, **kw: None,
+    },
+)
 mock_dbus.service = MagicMock()
 mock_dbus.service.Object = mock_dbus_service_Object
 mock_dbus.service.method = lambda *a, **kw: lambda f: f
@@ -54,10 +58,13 @@ sys.modules["gi.repository"] = mock_gi.repository
 
 _MODULE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "kde-plasmoid", "wayvox-kde-service.py"
+    "kde-plasmoid",
+    "wayvox-kde-service.py",
 )
 
 spec = importlib.util.spec_from_file_location("wayvox_npu_kde_service", _MODULE_PATH)
+if spec is None or spec.loader is None:
+    raise ImportError(_MODULE_PATH)
 kde_svc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(kde_svc)
 
@@ -66,6 +73,7 @@ spec.loader.exec_module(kde_svc)
 # ---------------------------------------------------------------------------
 
 from PyQt6.QtWidgets import QApplication  # noqa: E402
+
 
 @pytest.fixture(scope="session")
 def qapp():
@@ -80,8 +88,8 @@ def qapp():
 # 1. load_config
 # =========================================================================
 
-class TestLoadConfig:
 
+class TestLoadConfig:
     def test_valid_json(self, tmp_path):
         cfg = {"server-host": "10.0.0.1", "server-port": 9999}
         cfg_file = tmp_path / "settings.json"
@@ -129,8 +137,8 @@ class TestLoadConfig:
 # 2. server_url
 # =========================================================================
 
-class TestServerUrl:
 
+class TestServerUrl:
     def test_default_config(self):
         url = kde_svc.server_url("/rewrite", config={})
         assert url == "http://127.0.0.1:5000/rewrite"
@@ -141,7 +149,11 @@ class TestServerUrl:
         assert url == "http://10.0.0.5:8888/api/v1"
 
     def test_none_config_calls_load_config(self):
-        with patch.object(kde_svc, "load_config", return_value={"server-host": "host1", "server-port": 1234}):
+        with patch.object(
+            kde_svc,
+            "load_config",
+            return_value={"server-host": "host1", "server-port": 1234},
+        ):
             url = kde_svc.server_url("/test")
         assert url == "http://host1:1234/test"
 
@@ -150,7 +162,10 @@ class TestServerUrl:
         assert url == "http://127.0.0.1:5000"
 
     def test_path_with_query_string(self):
-        url = kde_svc.server_url("/search?q=hello", config={"server-host": "localhost", "server-port": 3000})
+        url = kde_svc.server_url(
+            "/search?q=hello",
+            config={"server-host": "localhost", "server-port": 3000},
+        )
         assert url == "http://localhost:3000/search?q=hello"
 
     def test_partial_config_uses_defaults(self):
@@ -167,8 +182,8 @@ class TestServerUrl:
 # 3. http_post
 # =========================================================================
 
-class TestHttpPost:
 
+class TestHttpPost:
     def test_success(self):
         response_data = {"result": "ok"}
         mock_resp = MagicMock()
@@ -182,13 +197,24 @@ class TestHttpPost:
         m.assert_called_once()
 
     def test_http_error(self):
-        with patch("urllib.request.urlopen", side_effect=urllib.error.HTTPError(
-                "http://x", 500, "Server Error", {}, None)):
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.HTTPError(
+                "http://x",
+                500,
+                "Server Error",
+                {},
+                None,
+            ),
+        ):
             result = kde_svc.http_post("http://x", {})
         assert result is None
 
     def test_timeout(self):
-        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("timed out")):
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("timed out"),
+        ):
             result = kde_svc.http_post("http://x", {})
         assert result is None
 
@@ -203,7 +229,10 @@ class TestHttpPost:
         assert result is None
 
     def test_connection_refused(self):
-        with patch("urllib.request.urlopen", side_effect=ConnectionRefusedError("refused")):
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=ConnectionRefusedError("refused"),
+        ):
             result = kde_svc.http_post("http://x", {})
         assert result is None
 
@@ -212,8 +241,8 @@ class TestHttpPost:
 # 4. type_text
 # =========================================================================
 
-class TestTypeText:
 
+class TestTypeText:
     def test_success(self):
         with patch.object(kde_svc, "subprocess") as mock_sub:
             mock_sub.run.return_value = MagicMock(returncode=0)
@@ -221,7 +250,9 @@ class TestTypeText:
             kde_svc.type_text("hello world", delay_ms=4)
         mock_sub.run.assert_called_once_with(
             ["ydotool", "type", "-d", "4", "--", "hello world"],
-            check=True, stdout=-1, stderr=-1
+            check=True,
+            stdout=-1,
+            stderr=-1,
         )
 
     def test_custom_delay(self):
@@ -240,6 +271,7 @@ class TestTypeText:
 
     def test_subprocess_error(self):
         import subprocess as real_subprocess
+
         with patch.object(kde_svc, "subprocess") as mock_sub:
             mock_sub.run.side_effect = real_subprocess.CalledProcessError(1, "ydotool")
             mock_sub.DEVNULL = -1
@@ -251,8 +283,8 @@ class TestTypeText:
 # 5. backspace_n
 # =========================================================================
 
-class TestBackspaceN:
 
+class TestBackspaceN:
     def test_zero(self):
         with patch.object(kde_svc, "subprocess") as mock_sub:
             mock_sub.DEVNULL = -1
@@ -286,8 +318,8 @@ class TestBackspaceN:
 # 6. OverlayCard
 # =========================================================================
 
-class TestOverlayCard:
 
+class TestOverlayCard:
     def test_init_ready(self, qapp):
         card = kde_svc.OverlayCard("diplomatic", "Hello world", ready=True)
         assert card.tone == "diplomatic"
@@ -331,8 +363,8 @@ class TestOverlayCard:
 # 7. LanguageBuddyOverlay
 # =========================================================================
 
-class TestLanguageBuddyOverlay:
 
+class TestLanguageBuddyOverlay:
     def test_show_overlay_creates_cards(self, qapp):
         overlay = kde_svc.LanguageBuddyOverlay()
         tones = ["diplomatic", "professional"]
@@ -471,8 +503,8 @@ class TestLanguageBuddyOverlay:
 # 8. HistoryOverlay
 # =========================================================================
 
-class TestHistoryOverlay:
 
+class TestHistoryOverlay:
     def test_show_history(self, qapp):
         overlay = kde_svc.HistoryOverlay()
         items = [
@@ -541,8 +573,8 @@ class TestHistoryOverlay:
 # 8a. _time_ago — thorough pure logic tests
 # =========================================================================
 
-class TestTimeAgo:
 
+class TestTimeAgo:
     @pytest.fixture
     def overlay(self, qapp):
         return kde_svc.HistoryOverlay()
@@ -630,8 +662,8 @@ class TestTimeAgo:
 # 9. RewriteWorker
 # =========================================================================
 
-class TestRewriteWorker:
 
+class TestRewriteWorker:
     def test_successful_rewrite(self, qapp):
         config = {"server-host": "localhost", "server-port": 5000}
         worker = kde_svc.RewriteWorker("hello", "diplomatic", config)
@@ -639,11 +671,7 @@ class TestRewriteWorker:
         results = []
         worker.finished.connect(lambda tone, text: results.append((tone, text)))
 
-        api_response = {
-            "variants": [
-                {"tone": "diplomatic", "text": "Greetings"}
-            ]
-        }
+        api_response = {"variants": [{"tone": "diplomatic", "text": "Greetings"}]}
 
         with patch.object(kde_svc, "http_post", return_value=api_response):
             worker.run()
@@ -682,11 +710,7 @@ class TestRewriteWorker:
         results = []
         worker.finished.connect(lambda tone, text: results.append((tone, text)))
 
-        api_response = {
-            "variants": [
-                {"tone": "casual", "text": "Hey there"}
-            ]
-        }
+        api_response = {"variants": [{"tone": "casual", "text": "Hey there"}]}
 
         with patch.object(kde_svc, "http_post", return_value=api_response):
             worker.run()
@@ -703,8 +727,12 @@ class TestRewriteWorker:
 
         api_response = {
             "variants": [
-                {"tone": "diplomatic", "text": "Greetings", "error": "LLM timeout"}
-            ]
+                {
+                    "tone": "diplomatic",
+                    "text": "Greetings",
+                    "error": "LLM timeout",
+                },
+            ],
         }
 
         with patch.object(kde_svc, "http_post", return_value=api_response):
@@ -725,7 +753,7 @@ class TestRewriteWorker:
 
         mock_post.assert_called_once_with(
             "http://myhost:9999/rewrite",
-            {"text": "test", "tones": ["formal"]}
+            {"text": "test", "tones": ["formal"]},
         )
 
     def test_multiple_variants_picks_matching(self, qapp):
@@ -753,8 +781,8 @@ class TestRewriteWorker:
 # 10. LanguageBuddyService
 # =========================================================================
 
-class TestLanguageBuddyService:
 
+class TestLanguageBuddyService:
     @pytest.fixture
     def service(self, qapp):
         overlay = kde_svc.LanguageBuddyOverlay()
@@ -768,25 +796,44 @@ class TestLanguageBuddyService:
     # --- HandleTranscription ---
 
     def test_handle_transcription_enabled(self, service):
-        config = {"language-buddy-enabled": True, "language-buddy-bypass": False, "language-buddy-timeout": 30}
-        with patch.object(kde_svc, "load_config", return_value=config), \
-             patch.object(service, "_process") as mock_proc:
+        config = {
+            "language-buddy-enabled": True,
+            "language-buddy-bypass": False,
+            "language-buddy-timeout": 30,
+        }
+        with (
+            patch.object(kde_svc, "load_config", return_value=config),
+            patch.object(
+                service,
+                "_process",
+            ) as mock_proc,
+        ):
             result = service.HandleTranscription("hello world")
         assert result is True
         mock_proc.assert_called_once_with("hello world", config)
 
     def test_handle_transcription_disabled(self, service):
         config = {"language-buddy-enabled": False}
-        with patch.object(kde_svc, "load_config", return_value=config), \
-             patch.object(service, "_process") as mock_proc:
+        with (
+            patch.object(kde_svc, "load_config", return_value=config),
+            patch.object(
+                service,
+                "_process",
+            ) as mock_proc,
+        ):
             result = service.HandleTranscription("hello world")
         assert result is False
         mock_proc.assert_not_called()
 
     def test_handle_transcription_missing_key(self, service):
         # No language-buddy-enabled key -> defaults to False
-        with patch.object(kde_svc, "load_config", return_value={}), \
-             patch.object(service, "_process") as mock_proc:
+        with (
+            patch.object(kde_svc, "load_config", return_value={}),
+            patch.object(
+                service,
+                "_process",
+            ) as mock_proc,
+        ):
             result = service.HandleTranscription("hello")
         assert result is False
         mock_proc.assert_not_called()
@@ -794,20 +841,38 @@ class TestLanguageBuddyService:
     # --- HandleTranscriptionWithContext ---
 
     def test_handle_with_context_enabled_valid(self, service):
-        config = {"language-buddy-enabled": True, "language-buddy-bypass": False, "language-buddy-timeout": 30}
+        config = {
+            "language-buddy-enabled": True,
+            "language-buddy-bypass": False,
+            "language-buddy-timeout": 30,
+        }
         context = json.dumps({"tones": ["casual", "formal"]})
 
-        with patch.object(kde_svc, "load_config", return_value=config), \
-             patch.object(service, "_process") as mock_proc:
+        with (
+            patch.object(kde_svc, "load_config", return_value=config),
+            patch.object(
+                service,
+                "_process",
+            ) as mock_proc,
+        ):
             result = service.HandleTranscriptionWithContext("hello", context)
         assert result is True
         mock_proc.assert_called_once_with("hello", config, ["casual", "formal"])
 
     def test_handle_with_context_invalid_json_fallback(self, service):
-        config = {"language-buddy-enabled": True, "language-buddy-bypass": False, "language-buddy-timeout": 30}
+        config = {
+            "language-buddy-enabled": True,
+            "language-buddy-bypass": False,
+            "language-buddy-timeout": 30,
+        }
 
-        with patch.object(kde_svc, "load_config", return_value=config), \
-             patch.object(service, "_process") as mock_proc:
+        with (
+            patch.object(kde_svc, "load_config", return_value=config),
+            patch.object(
+                service,
+                "_process",
+            ) as mock_proc,
+        ):
             result = service.HandleTranscriptionWithContext("hello", "not json!!!")
         assert result is True
         mock_proc.assert_called_once_with("hello", config, kde_svc.DEFAULT_TONES)
@@ -815,29 +880,52 @@ class TestLanguageBuddyService:
     def test_handle_with_context_disabled(self, service):
         config = {"language-buddy-enabled": False}
 
-        with patch.object(kde_svc, "load_config", return_value=config), \
-             patch.object(service, "_process") as mock_proc:
+        with (
+            patch.object(kde_svc, "load_config", return_value=config),
+            patch.object(
+                service,
+                "_process",
+            ) as mock_proc,
+        ):
             result = service.HandleTranscriptionWithContext("hello", "{}")
         assert result is False
         mock_proc.assert_not_called()
 
     def test_handle_with_context_empty_tones_uses_default(self, service):
-        config = {"language-buddy-enabled": True, "language-buddy-bypass": False, "language-buddy-timeout": 30}
+        config = {
+            "language-buddy-enabled": True,
+            "language-buddy-bypass": False,
+            "language-buddy-timeout": 30,
+        }
         context = json.dumps({"tones": []})
 
-        with patch.object(kde_svc, "load_config", return_value=config), \
-             patch.object(service, "_process") as mock_proc:
+        with (
+            patch.object(kde_svc, "load_config", return_value=config),
+            patch.object(
+                service,
+                "_process",
+            ) as mock_proc,
+        ):
             result = service.HandleTranscriptionWithContext("hello", context)
         assert result is True
         # Empty tones list is falsy, so DEFAULT_TONES used
         mock_proc.assert_called_once_with("hello", config, kde_svc.DEFAULT_TONES)
 
     def test_handle_with_context_none_tones_uses_default(self, service):
-        config = {"language-buddy-enabled": True, "language-buddy-bypass": False, "language-buddy-timeout": 30}
+        config = {
+            "language-buddy-enabled": True,
+            "language-buddy-bypass": False,
+            "language-buddy-timeout": 30,
+        }
         context = json.dumps({"tones": None})
 
-        with patch.object(kde_svc, "load_config", return_value=config), \
-             patch.object(service, "_process") as mock_proc:
+        with (
+            patch.object(kde_svc, "load_config", return_value=config),
+            patch.object(
+                service,
+                "_process",
+            ) as mock_proc,
+        ):
             result = service.HandleTranscriptionWithContext("hello", context)
         assert result is True
         mock_proc.assert_called_once_with("hello", config, kde_svc.DEFAULT_TONES)
@@ -851,8 +939,14 @@ class TestLanguageBuddyService:
         mock_obj.Get.return_value = mock_result
         mock_bus.get_object.return_value = mock_obj
 
-        with patch.object(kde_svc.dbus, "SessionBus", return_value=mock_bus), \
-             patch.object(kde_svc.dbus, "Interface", return_value=MagicMock()):
+        with (
+            patch.object(
+                kde_svc.dbus,
+                "SessionBus",
+                return_value=mock_bus,
+            ),
+            patch.object(kde_svc.dbus, "Interface", return_value=MagicMock()),
+        ):
             result = service.GetFocusedApp()
         assert result == ("firefox", "Mozilla Firefox")
 
@@ -860,8 +954,14 @@ class TestLanguageBuddyService:
         mock_bus = MagicMock()
         mock_bus.get_object.side_effect = Exception("KWin not available")
 
-        with patch.object(kde_svc.dbus, "SessionBus", return_value=mock_bus), \
-             patch.object(kde_svc, "subprocess") as mock_sub:
+        with (
+            patch.object(
+                kde_svc.dbus,
+                "SessionBus",
+                return_value=mock_bus,
+            ),
+            patch.object(kde_svc, "subprocess") as mock_sub,
+        ):
             mock_sub.check_output.side_effect = [
                 b"konsole\n",  # class name
                 b"Terminal\n",  # window name
@@ -875,8 +975,14 @@ class TestLanguageBuddyService:
         mock_bus = MagicMock()
         mock_bus.get_object.side_effect = Exception("fail")
 
-        with patch.object(kde_svc.dbus, "SessionBus", return_value=mock_bus), \
-             patch.object(kde_svc, "subprocess") as mock_sub:
+        with (
+            patch.object(
+                kde_svc.dbus,
+                "SessionBus",
+                return_value=mock_bus,
+            ),
+            patch.object(kde_svc, "subprocess") as mock_sub,
+        ):
             mock_sub.check_output.side_effect = Exception("xdotool fail")
             mock_sub.DEVNULL = -1
             result = service.GetFocusedApp()
@@ -913,8 +1019,14 @@ class TestLanguageBuddyService:
         QObject with a MagicMock QThread.
         """
         mock_worker = MagicMock()
-        with patch.object(kde_svc, "RewriteWorker", return_value=mock_worker), \
-             patch.object(kde_svc, "QThread") as mock_thread_cls:
+        with (
+            patch.object(
+                kde_svc,
+                "RewriteWorker",
+                return_value=mock_worker,
+            ),
+            patch.object(kde_svc, "QThread") as mock_thread_cls,
+        ):
             mock_thread_cls.return_value = MagicMock()
             if tones is not None:
                 service._process(text, config, tones)
@@ -997,8 +1109,13 @@ class TestLanguageBuddyService:
             self._run_process(service, "hello", config, tones=["diplomatic"])
 
         # Now simulate card_selected signal
-        with patch.object(kde_svc, "type_text") as mock_type2, \
-             patch.object(kde_svc, "backspace_n") as mock_bs2:
+        with (
+            patch.object(kde_svc, "type_text") as mock_type2,
+            patch.object(
+                kde_svc,
+                "backspace_n",
+            ) as mock_bs2,
+        ):
             service._overlay.card_selected.emit("different text")
         mock_bs2.assert_called_once_with(5)  # len("hello") = 5
         mock_type2.assert_called_once_with("different text")
@@ -1010,8 +1127,13 @@ class TestLanguageBuddyService:
         with patch.object(kde_svc, "type_text"):
             self._run_process(service, "hello", config, tones=["diplomatic"])
 
-        with patch.object(kde_svc, "type_text") as mock_type2, \
-             patch.object(kde_svc, "backspace_n") as mock_bs2:
+        with (
+            patch.object(kde_svc, "type_text") as mock_type2,
+            patch.object(
+                kde_svc,
+                "backspace_n",
+            ) as mock_bs2,
+        ):
             service._overlay.card_selected.emit("hello")  # same as original
         mock_bs2.assert_not_called()
         mock_type2.assert_not_called()
@@ -1031,8 +1153,8 @@ class TestLanguageBuddyService:
 # Edge cases and integration-style tests
 # =========================================================================
 
-class TestModuleConstants:
 
+class TestModuleConstants:
     def test_default_tones(self):
         assert kde_svc.DEFAULT_TONES == ["diplomatic", "professional"]
 
@@ -1042,7 +1164,6 @@ class TestModuleConstants:
 
 
 class TestServerUrlIntegration:
-
     def test_load_config_and_server_url_together(self, tmp_path):
         cfg = {"server-host": "10.0.0.1", "server-port": 8080}
         cfg_file = tmp_path / "settings.json"

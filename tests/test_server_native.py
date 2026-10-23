@@ -46,8 +46,8 @@ for _p in _patches:
     _p.start()
 
 server_mod = importlib.import_module("server-native")
-server_mod._openvino_genai = _mock_ov
-server_mod._openvino_genai_for_llm = _mock_ov
+setattr(server_mod, "_openvino_genai", _mock_ov)
+setattr(server_mod, "_openvino_genai_for_llm", _mock_ov)
 
 for _p in _patches:
     _p.stop()
@@ -323,7 +323,7 @@ class TestLLMManager:
         model_name = "llama-3"
         model_dir = os.path.join(llm_mgr.models_dir, model_name)
         os.makedirs(model_dir)
-        pipe = llm_mgr.load_model(model_name)
+        llm_mgr.load_model(model_name)
         _mock_ov.LLMPipeline.assert_called_once()
         assert llm_mgr.current_model == model_name
         assert llm_mgr.pipeline is not None
@@ -453,9 +453,22 @@ class TestHealthRoute:
                 "openvino": {
                     "importable": True,
                     "version": "2026.4.1",
-                    "devices": [{"id": "NPU", "properties": {"FULL_DEVICE_NAME": "Intel AI Boost"}, "plugins": {}}],
+                    "devices": [
+                        {
+                            "id": "NPU",
+                            "properties": {"FULL_DEVICE_NAME": "Intel AI Boost"},
+                            "plugins": {},
+                        }
+                    ],
                 },
-                "pci": [{"kind": "NPU", "slot": "00:0b.0", "vendor": "Intel", "device": "Meteor Lake NPU"}],
+                "pci": [
+                    {
+                        "kind": "NPU",
+                        "slot": "00:0b.0",
+                        "vendor": "Intel",
+                        "device": "Meteor Lake NPU",
+                    }
+                ],
                 "modules": {"intel_vpu": {"loaded": True, "version": "1"}},
                 "nvidia": [],
             },
@@ -474,7 +487,9 @@ class TestHealthRoute:
 
 class TestModelsRoute:
     def test_list_models(self, client):
-        server_mod.model_manager.list_models = MagicMock(return_value=["whisper-small-en", "whisper-large-v3"])
+        server_mod.model_manager.list_models = MagicMock(
+            return_value=["whisper-small-en", "whisper-large-v3"],
+        )
         resp = client.get("/models")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -507,7 +522,9 @@ class TestDefaultModelRoute:
         assert resp.status_code == 404
 
     def test_set_default_model_success(self, client):
-        server_mod.model_manager.list_models = MagicMock(return_value=["whisper-small-en"])
+        server_mod.model_manager.list_models = MagicMock(
+            return_value=["whisper-small-en"],
+        )
         server_mod.model_manager.load_model = MagicMock()
         resp = client.put(
             "/model/default",
@@ -547,7 +564,9 @@ class TestTranscribeRoute:
         assert resp.get_json()["text"] == "open a pull request"
 
     def test_exception(self, client, wav_bytes):
-        server_mod.model_manager.load_model = MagicMock(side_effect=RuntimeError("device error"))
+        server_mod.model_manager.load_model = MagicMock(
+            side_effect=RuntimeError("device error"),
+        )
         resp = client.post("/transcribe", data=wav_bytes)
         assert resp.status_code == 500
         assert "device error" in resp.get_json()["error"]
@@ -567,7 +586,9 @@ class TestTranscribeWithModelRoute:
         assert call_kwargs["language"] == "<|fr|>"
 
     def test_model_not_found(self, client, wav_bytes):
-        server_mod.model_manager.load_model = MagicMock(side_effect=FileNotFoundError("not found"))
+        server_mod.model_manager.load_model = MagicMock(
+            side_effect=FileNotFoundError("not found"),
+        )
         resp = client.post("/transcribe/bad-model", data=wav_bytes)
         assert resp.status_code == 500
         assert "not found" in resp.get_json()["error"]
@@ -614,7 +635,10 @@ class TestTranscribeStreamRoute:
 
         # Parse SSE events from response data
         raw = resp.get_data(as_text=True)
-        events = [line[len("data: ") :] for line in raw.split("\n") if line.startswith("data: ")]
+        events = []
+        for line in raw.split("\n"):
+            if line.startswith("data: "):
+                events.append(line[len("data: ") :])
         assert len(events) >= 2  # chunk events + done event
         # Last event should have done: true
         last = json.loads(events[-1])
@@ -677,7 +701,10 @@ class TestTranscribeStreamRoute:
         assert resp.status_code == 200
         raw = resp.get_data(as_text=True)
         # The stream should still produce a done event (from the finally block)
-        events = [line[len("data: ") :] for line in raw.split("\n") if line.startswith("data: ")]
+        events = []
+        for line in raw.split("\n"):
+            if line.startswith("data: "):
+                events.append(line[len("data: ") :])
         last = json.loads(events[-1])
         assert last["done"] is True
         assert last["full_text"] == ""
@@ -726,7 +753,7 @@ class TestRewriteRoute:
                     "text": "hello",
                     "tones": ["my_tone"],
                     "custom_tones": {"my_tone": "Be very casual"},
-                }
+                },
             ),
             content_type="application/json",
         )
@@ -735,7 +762,9 @@ class TestRewriteRoute:
         assert any(v["tone"] == "my_tone" for v in variants)
 
     def test_rewrite_exception(self, client):
-        server_mod.llm_manager.rewrite = MagicMock(side_effect=RuntimeError("LLM failed"))
+        server_mod.llm_manager.rewrite = MagicMock(
+            side_effect=RuntimeError("LLM failed"),
+        )
         resp = client.post(
             "/rewrite",
             data=json.dumps({"text": "hello"}),
@@ -791,7 +820,9 @@ class TestSetLLMModelRoute:
 
     def test_load_exception(self, client):
         server_mod.llm_manager.list_models = MagicMock(return_value=["llama-3"])
-        server_mod.llm_manager.load_model = MagicMock(side_effect=RuntimeError("load failed"))
+        server_mod.llm_manager.load_model = MagicMock(
+            side_effect=RuntimeError("load failed"),
+        )
         resp = client.put(
             "/llm/model",
             data=json.dumps({"model": "llama-3"}),
@@ -849,7 +880,9 @@ class TestPunctuateRoute:
         assert resp.get_json()["text"] == "Hello, world."
 
     def test_exception(self, client):
-        server_mod.llm_manager.punctuate = MagicMock(side_effect=RuntimeError("inference crash"))
+        server_mod.llm_manager.punctuate = MagicMock(
+            side_effect=RuntimeError("inference crash"),
+        )
         resp = client.post(
             "/punctuate",
             data=json.dumps({"text": "hello world"}),
@@ -900,7 +933,9 @@ class TestTranslateRoute:
         assert data["target_language"] == "Spanish"
 
     def test_exception(self, client):
-        server_mod.llm_manager.translate = MagicMock(side_effect=RuntimeError("translation error"))
+        server_mod.llm_manager.translate = MagicMock(
+            side_effect=RuntimeError("translation error"),
+        )
         resp = client.post(
             "/translate",
             data=json.dumps({"text": "hello", "target_language": "Spanish"}),
@@ -952,7 +987,9 @@ class TestTranscribeTimestampsRoute:
         server_mod.model_manager.load_model.assert_called_with("whisper-large")
 
     def test_exception(self, client, wav_bytes):
-        server_mod.model_manager.load_model = MagicMock(side_effect=RuntimeError("crash"))
+        server_mod.model_manager.load_model = MagicMock(
+            side_effect=RuntimeError("crash"),
+        )
         resp = client.post("/transcribe/timestamps", data=wav_bytes)
         assert resp.status_code == 500
         assert "crash" in resp.get_json()["error"]
@@ -967,9 +1004,17 @@ class TestHistoryExportRoute:
     def test_json_format(self, client, tmp_path):
         db_path = str(tmp_path / "history.db")
         with sqlite3.connect(db_path) as conn:
-            conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
-            conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("hello", 1700000000.0))
-            conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("world", 1700000010.0))
+            conn.execute(
+                "CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)",
+            )
+            conn.execute(
+                "INSERT INTO history (text, timestamp) VALUES (?, ?)",
+                ("hello", 1700000000.0),
+            )
+            conn.execute(
+                "INSERT INTO history (text, timestamp) VALUES (?, ?)",
+                ("world", 1700000010.0),
+            )
 
         with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=json")
@@ -984,8 +1029,13 @@ class TestHistoryExportRoute:
     def test_markdown_format(self, client, tmp_path):
         db_path = str(tmp_path / "history.db")
         with sqlite3.connect(db_path) as conn:
-            conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
-            conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("test entry", 1700000000.0))
+            conn.execute(
+                "CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)",
+            )
+            conn.execute(
+                "INSERT INTO history (text, timestamp) VALUES (?, ?)",
+                ("test entry", 1700000000.0),
+            )
 
         with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=markdown")
@@ -998,8 +1048,13 @@ class TestHistoryExportRoute:
     def test_srt_format(self, client, tmp_path):
         db_path = str(tmp_path / "history.db")
         with sqlite3.connect(db_path) as conn:
-            conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
-            conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", ("subtitle line", 1700000000.0))
+            conn.execute(
+                "CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)",
+            )
+            conn.execute(
+                "INSERT INTO history (text, timestamp) VALUES (?, ?)",
+                ("subtitle line", 1700000000.0),
+            )
 
         with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=srt")
@@ -1012,7 +1067,9 @@ class TestHistoryExportRoute:
     def test_unknown_format(self, client, tmp_path):
         db_path = str(tmp_path / "history.db")
         with sqlite3.connect(db_path) as conn:
-            conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
+            conn.execute(
+                "CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)",
+            )
 
         with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=xml")
@@ -1022,9 +1079,14 @@ class TestHistoryExportRoute:
     def test_limit_parameter(self, client, tmp_path):
         db_path = str(tmp_path / "history.db")
         with sqlite3.connect(db_path) as conn:
-            conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)")
+            conn.execute(
+                "CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)",
+            )
             for i in range(10):
-                conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)", (f"entry {i}", 1700000000.0 + i))
+                conn.execute(
+                    "INSERT INTO history (text, timestamp) VALUES (?, ?)",
+                    (f"entry {i}", 1700000000.0 + i),
+                )
 
         with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
             resp = client.get("/history/export?format=json&limit=3")
@@ -1066,7 +1128,7 @@ class TestRewriteToneResolution:
                     "text": "hello",
                     "tones": ["diplomatic"],
                     "custom_tones": {"diplomatic": "My custom prompt"},
-                }
+                },
             ),
             content_type="application/json",
         )
@@ -1082,7 +1144,7 @@ class TestRewriteToneResolution:
                 {
                     "text": "hello",
                     "tones": ["nonexistent_tone"],
-                }
+                },
             ),
             content_type="application/json",
         )
@@ -1097,7 +1159,9 @@ class TestStreamException:
     """Verify that exceptions in the streaming route return 500."""
 
     def test_stream_load_model_failure(self, client, wav_bytes):
-        server_mod.model_manager.load_model = MagicMock(side_effect=RuntimeError("NPU unavailable"))
+        server_mod.model_manager.load_model = MagicMock(
+            side_effect=RuntimeError("NPU unavailable"),
+        )
         resp = client.post("/transcribe/stream", data=wav_bytes)
         assert resp.status_code == 500
         assert "NPU unavailable" in resp.get_json()["error"]
@@ -1220,7 +1284,11 @@ class TestFasterWhisperEngine:
     def test_load_cuda_picks_supported_compute_type(self, model_mgr):
         whisper = self._use_faster_whisper("cuda:1")
         ct2 = MagicMock()
-        ct2.get_supported_compute_types.return_value = ["int8", "float32", "int8_float16"]
+        ct2.get_supported_compute_types.return_value = [
+            "int8",
+            "float32",
+            "int8_float16",
+        ]
         with patch.dict(sys.modules, {"ctranslate2": ct2}):
             model_mgr.load_model("tiny.en")
         kwargs = whisper.call_args.kwargs
@@ -1248,9 +1316,16 @@ class TestFasterWhisperEngine:
         self._use_faster_whisper()
         pipe = MagicMock()
         info = MagicMock(language="en", language_probability=0.9123)
-        pipe.transcribe.return_value = ([_fw_segment("hello"), _fw_segment(" world")], info)
+        pipe.transcribe.return_value = (
+            [_fw_segment("hello"), _fw_segment(" world")],
+            info,
+        )
         model_mgr.pipelines["tiny.en"] = pipe
-        text, perf, _elapsed = model_mgr.transcribe("tiny.en", np.zeros(16), language="en")
+        text, perf, _elapsed = model_mgr.transcribe(
+            "tiny.en",
+            np.zeros(16),
+            language="en",
+        )
         assert text == "hello world"
         assert perf == {"language": "en", "language_probability": 0.912}
         assert pipe.transcribe.call_args.kwargs["language"] == "en"
@@ -1259,7 +1334,10 @@ class TestFasterWhisperEngine:
     def test_transcribe_stream(self, model_mgr):
         self._use_faster_whisper()
         pipe = MagicMock()
-        pipe.transcribe.return_value = ([_fw_segment("a"), _fw_segment("b")], MagicMock())
+        pipe.transcribe.return_value = (
+            [_fw_segment("a"), _fw_segment("b")],
+            MagicMock(),
+        )
         model_mgr.pipelines["tiny.en"] = pipe
         chunks = list(model_mgr.transcribe_stream("tiny.en", np.zeros(16)))
         assert chunks == ["a", "b"]
@@ -1273,7 +1351,11 @@ class TestFasterWhisperEngine:
             MagicMock(),
         )
         model_mgr.pipelines["tiny.en"] = pipe
-        text, chunks, perf = model_mgr.transcribe_timestamps("tiny.en", np.zeros(16), language="de")
+        text, chunks, perf = model_mgr.transcribe_timestamps(
+            "tiny.en",
+            np.zeros(16),
+            language="de",
+        )
         assert text == "hello world"
         assert chunks == [
             {"text": "hello", "start": 0.0, "end": 0.25},
@@ -1315,7 +1397,11 @@ class TestOpenVinoBranches:
         result.chunks = []
         pipe.generate.return_value = result
         model_mgr.pipelines["m"] = pipe
-        text, chunks, _perf = model_mgr.transcribe_timestamps("m", np.zeros(8), language="fr")
+        text, chunks, _perf = model_mgr.transcribe_timestamps(
+            "m",
+            np.zeros(8),
+            language="fr",
+        )
         assert text == "bonjour"
         assert chunks == []
         assert pipe.generate.call_args.kwargs["language"] == "<|fr|>"

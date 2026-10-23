@@ -27,38 +27,52 @@ _spec = importlib.util.spec_from_file_location(
     "push_to_talk",
     os.path.join(PROJECT_ROOT, "push-to-talk.py"),
 )
+if _spec is None or _spec.loader is None:
+    raise ImportError("push-to-talk.py")
 ptt = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ptt)
 
-# Import conftest helpers
-sys.path.insert(0, os.path.join(PROJECT_ROOT, "tests"))
-from conftest import make_silent_raw
-
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def make_silent_raw(duration_s=1.0, sample_rate=16000):
+    """Generate silent raw PCM."""
+    count = int(sample_rate * duration_s)
+    return struct.pack(f"<{count}h", *([0] * count))
+
+
+def _sine_samples(count, amplitude, sample_rate):
+    """Return a 440 Hz sine wave as 16-bit sample values."""
+    samples = []
+    for index in range(count):
+        phase = 2 * math.pi * 440 * index / sample_rate
+        samples.append(int(amplitude * math.sin(phase)))
+    return samples
+
 
 def _loud_raw(duration_s=0.5, amplitude=16000, sample_rate=16000):
     """Raw PCM with a loud sine wave (well above any silence threshold)."""
-    n = int(sample_rate * duration_s)
-    samples = [int(amplitude * math.sin(2 * math.pi * 440 * i / sample_rate))
-               for i in range(n)]
-    return struct.pack(f"<{n}h", *samples)
+    count = int(sample_rate * duration_s)
+    samples = _sine_samples(count, amplitude, sample_rate)
+    return struct.pack(f"<{count}h", *samples)
 
 
 def _quiet_raw(duration_s=0.5, amplitude=5, sample_rate=16000):
     """Raw PCM that is extremely quiet (below typical thresholds)."""
-    n = int(sample_rate * duration_s)
-    samples = [int(amplitude * math.sin(2 * math.pi * 440 * i / sample_rate))
-               for i in range(n)]
-    return struct.pack(f"<{n}h", *samples)
+    count = int(sample_rate * duration_s)
+    samples = _sine_samples(count, amplitude, sample_rate)
+    return struct.pack(f"<{count}h", *samples)
 
 
 class _AsyncCtx:
     """Minimal async context manager for mocking ``async with``."""
+
     def __init__(self, return_value):
         self._rv = return_value
+
     async def __aenter__(self):
         return self._rv
+
     async def __aexit__(self, *a):
         return False
 
@@ -86,6 +100,7 @@ def _make_aiohttp_mocks(resp):
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
+
 class TestConstants:
     """Verify module-level constants."""
 
@@ -108,12 +123,28 @@ class TestConstants:
         assert ptt.MODEL_SIZE_ORDER == ["tiny", "base", "small", "medium", "large"]
 
     def test_voice_commands_has_expected_keys(self):
-        expected = {"select all", "undo that", "redo that", "copy that",
-                    "paste that", "cut that", "new line", "new paragraph",
-                    "tab key", "delete that", "delete word", "period",
-                    "comma", "question mark", "exclamation mark",
-                    "exclamation point", "colon", "semicolon",
-                    "open quote", "close quote"}
+        expected = {
+            "select all",
+            "undo that",
+            "redo that",
+            "copy that",
+            "paste that",
+            "cut that",
+            "new line",
+            "new paragraph",
+            "tab key",
+            "delete that",
+            "delete word",
+            "period",
+            "comma",
+            "question mark",
+            "exclamation mark",
+            "exclamation point",
+            "colon",
+            "semicolon",
+            "open quote",
+            "close quote",
+        }
         assert expected == set(ptt.VOICE_COMMANDS.keys())
 
     def test_voice_command_select_all(self):
@@ -121,7 +152,8 @@ class TestConstants:
 
     def test_voice_command_new_paragraph(self):
         assert ptt.VOICE_COMMANDS["new paragraph"] == [
-            ("key", "28:1 28:0"), ("key", "28:1 28:0")
+            ("key", "28:1 28:0"),
+            ("key", "28:1 28:0"),
         ]
 
     def test_voice_command_period(self):
@@ -129,23 +161,24 @@ class TestConstants:
 
     def test_default_app_contexts(self):
         assert "org.mozilla.Thunderbird.desktop" in ptt.DEFAULT_APP_CONTEXTS
-        assert ptt.DEFAULT_APP_CONTEXTS["org.mozilla.Thunderbird.desktop"] == {"tones": ["professional"]}
+        thunderbird = ptt.DEFAULT_APP_CONTEXTS["org.mozilla.Thunderbird.desktop"]
+        assert thunderbird == {"tones": ["professional"]}
         assert ptt.DEFAULT_APP_CONTEXTS["org.gnome.Terminal.desktop"] == {"tones": []}
 
     def test_dbus_bus_names(self):
-        assert ptt.DBUS_BUS_NAMES == ['org.gnome.Shell', 'com.whisper.LanguageBuddy']
+        assert ptt.DBUS_BUS_NAMES == ["org.gnome.Shell", "com.whisper.LanguageBuddy"]
 
     def test_dbus_object_path(self):
-        assert ptt.DBUS_OBJECT_PATH == '/com/whisper/LanguageBuddy'
+        assert ptt.DBUS_OBJECT_PATH == "/com/whisper/LanguageBuddy"
 
     def test_dbus_interface(self):
-        assert ptt.DBUS_INTERFACE == 'com.whisper.LanguageBuddy'
+        assert ptt.DBUS_INTERFACE == "com.whisper.LanguageBuddy"
 
 
 # ── find_keyboards() ─────────────────────────────────────────────────────────
 
-class TestFindKeyboards:
 
+class TestFindKeyboards:
     def test_finds_keyboard_with_key_a_and_enter(self):
         dev = MagicMock()
         dev.name = "AT Translated Set 2 keyboard"
@@ -171,7 +204,10 @@ class TestFindKeyboards:
             ("EV_KEY", 1): [("KEY_A",), ("KEY_ENTER",)],
         }
         mock_evdev = MagicMock()
-        mock_evdev.list_devices.return_value = ["/dev/input/event0", "/dev/input/event1"]
+        mock_evdev.list_devices.return_value = [
+            "/dev/input/event0",
+            "/dev/input/event1",
+        ]
         mock_evdev.InputDevice.side_effect = [virtual_dev, real_dev]
         with patch.dict("sys.modules", {"evdev": mock_evdev}):
             result = ptt.find_keyboards()
@@ -205,7 +241,10 @@ class TestFindKeyboards:
         dev.name = "Keyboard"
         dev.path = "/dev/input/event0"
         dev.capabilities.return_value = {
-            ("EV_KEY", 1): [(("KEY_A", "KEY_A_ALIAS"),), (("KEY_ENTER", "KEY_RETURN"),)],
+            ("EV_KEY", 1): [
+                (("KEY_A", "KEY_A_ALIAS"),),
+                (("KEY_ENTER", "KEY_RETURN"),),
+            ],
         }
         mock_evdev = MagicMock()
         mock_evdev.list_devices.return_value = ["/dev/input/event0"]
@@ -253,7 +292,10 @@ class TestFindKeyboards:
             ("EV_KEY", 1): [("KEY_A",), ("KEY_ENTER",)],
         }
         mock_evdev = MagicMock()
-        mock_evdev.list_devices.return_value = ["/dev/input/event0", "/dev/input/event1"]
+        mock_evdev.list_devices.return_value = [
+            "/dev/input/event0",
+            "/dev/input/event1",
+        ]
         mock_evdev.InputDevice.side_effect = [dev0, dev1]
         with patch.dict("sys.modules", {"evdev": mock_evdev}):
             result = ptt.find_keyboards()
@@ -308,8 +350,8 @@ class TestFindKeyboards:
 
 # ── AudioBuffer ──────────────────────────────────────────────────────────────
 
-class TestAudioBuffer:
 
+class TestAudioBuffer:
     def test_init_starts_reader_thread(self):
         proc = MagicMock()
         proc.stdout.read.return_value = b""
@@ -352,13 +394,13 @@ class TestAudioBuffer:
 
 # ── record_audio() ───────────────────────────────────────────────────────────
 
-class TestRecordAudio:
 
+class TestRecordAudio:
     def test_record_audio_returns_audio_buffer(self, mock_popen):
         popen_cls, proc = mock_popen
         with patch.object(ptt, "AudioBuffer") as mock_buf_cls:
             mock_buf_cls.return_value = MagicMock()
-            result = ptt.record_audio()
+            ptt.record_audio()
         popen_cls.assert_called_once()
         args = popen_cls.call_args
         assert "parec" in args[0][0]
@@ -368,8 +410,8 @@ class TestRecordAudio:
 
 # ── stop_recording() ────────────────────────────────────────────────────────
 
-class TestStopRecording:
 
+class TestStopRecording:
     def test_returns_none_for_all_silence(self):
         audio_buf = MagicMock()
         audio_buf.stop.return_value = make_silent_raw(duration_s=1.0)
@@ -396,6 +438,7 @@ class TestStopRecording:
 
 
 # ── trim_silence() ───────────────────────────────────────────────────────────
+
 
 class TestTrimSilence:
     """Pure logic function — test every branch and edge case."""
@@ -477,8 +520,7 @@ class TestTrimSilence:
     def test_single_frame_of_audio(self):
         """Exactly one frame of loud audio."""
         frame_samples = int(16000 * 20 / 1000)  # 320 samples for 20ms
-        samples = [int(16000 * math.sin(2 * math.pi * 440 * i / 16000))
-                    for i in range(frame_samples)]
+        samples = _sine_samples(frame_samples, 16000, 16000)
         raw = struct.pack(f"<{len(samples)}h", *samples)
         result = ptt.trim_silence(raw, threshold_db=-40, pad_frames=0)
         assert len(result) > 0
@@ -493,12 +535,16 @@ class TestTrimSilence:
 
 # ── transcribe_stream() ─────────────────────────────────────────────────────
 
+
 class _AsyncIterLines:
     """Async iterator over a list of byte lines — mocks ``resp.content``."""
+
     def __init__(self, lines):
         self._it = iter(lines)
+
     def __aiter__(self):
         return self
+
     async def __anext__(self):
         try:
             return next(self._it)
@@ -507,21 +553,27 @@ class _AsyncIterLines:
 
 
 class TestTranscribeStream:
-
     @pytest.mark.asyncio
     async def test_streams_text_and_types(self):
         resp = MagicMock()
         resp.status = 200
-        resp.content = _AsyncIterLines([
-            b'data: {"text": "hello "}\n',
-            b'data: {"text": "world"}\n',
-            b'data: {"done": true}\n',
-        ])
+        resp.content = _AsyncIterLines(
+            [
+                b'data: {"text": "hello "}\n',
+                b'data: {"text": "world"}\n',
+                b'data: {"done": true}\n',
+            ],
+        )
         mock_aiohttp, mock_session = _make_aiohttp_mocks(resp)
 
-        with patch.dict("sys.modules", {"aiohttp": mock_aiohttp}), \
-             patch.object(ptt, "type_text") as mock_type, \
-             patch.object(ptt, "transcribe_batch", new_callable=AsyncMock):
+        with (
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+            patch.object(
+                ptt,
+                "type_text",
+            ) as mock_type,
+            patch.object(ptt, "transcribe_batch", new_callable=AsyncMock),
+        ):
             result = await ptt.transcribe_stream(b"wavdata", 5000, 2)
         assert result is True
         assert mock_type.call_count == 2
@@ -532,8 +584,15 @@ class TestTranscribeStream:
         resp.status = 404
         mock_aiohttp, mock_session = _make_aiohttp_mocks(resp)
 
-        with patch.dict("sys.modules", {"aiohttp": mock_aiohttp}), \
-             patch.object(ptt, "transcribe_batch", new_callable=AsyncMock, return_value="fallback") as mock_batch:
+        with (
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+            patch.object(
+                ptt,
+                "transcribe_batch",
+                new_callable=AsyncMock,
+                return_value="fallback",
+            ) as mock_batch,
+        ):
             result = await ptt.transcribe_stream(b"wavdata", 5000, 2)
         mock_batch.assert_awaited_once_with(b"wavdata", 5000, language=None)
         assert result == "fallback"
@@ -542,34 +601,48 @@ class TestTranscribeStream:
     async def test_skips_non_sse_lines(self):
         resp = MagicMock()
         resp.status = 200
-        resp.content = _AsyncIterLines([
-            b": comment\n",
-            b"\n",
-            b"event: ping\n",
-            b'data: {"text": "only"}\n',
-            b'data: {"done": true}\n',
-        ])
+        resp.content = _AsyncIterLines(
+            [
+                b": comment\n",
+                b"\n",
+                b"event: ping\n",
+                b'data: {"text": "only"}\n',
+                b'data: {"done": true}\n',
+            ],
+        )
         mock_aiohttp, mock_session = _make_aiohttp_mocks(resp)
 
-        with patch.dict("sys.modules", {"aiohttp": mock_aiohttp}), \
-             patch.object(ptt, "type_text") as mock_type:
-            result = await ptt.transcribe_stream(b"wavdata", 5000, 2)
+        with (
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+            patch.object(
+                ptt,
+                "type_text",
+            ) as mock_type,
+        ):
+            await ptt.transcribe_stream(b"wavdata", 5000, 2)
         mock_type.assert_called_once_with("only", delay_ms=2)
 
     @pytest.mark.asyncio
     async def test_skips_invalid_json(self):
         resp = MagicMock()
         resp.status = 200
-        resp.content = _AsyncIterLines([
-            b"data: {invalid json}\n",
-            b'data: {"text": "valid"}\n',
-            b'data: {"done": true}\n',
-        ])
+        resp.content = _AsyncIterLines(
+            [
+                b"data: {invalid json}\n",
+                b'data: {"text": "valid"}\n',
+                b'data: {"done": true}\n',
+            ],
+        )
         mock_aiohttp, mock_session = _make_aiohttp_mocks(resp)
 
-        with patch.dict("sys.modules", {"aiohttp": mock_aiohttp}), \
-             patch.object(ptt, "type_text") as mock_type:
-            result = await ptt.transcribe_stream(b"wavdata", 5000, 2)
+        with (
+            patch.dict("sys.modules", {"aiohttp": mock_aiohttp}),
+            patch.object(
+                ptt,
+                "type_text",
+            ) as mock_type,
+        ):
+            await ptt.transcribe_stream(b"wavdata", 5000, 2)
         mock_type.assert_called_once_with("valid", delay_ms=2)
 
     @pytest.mark.asyncio
@@ -598,8 +671,8 @@ class TestTranscribeStream:
 
 # ── transcribe_batch() ───────────────────────────────────────────────────────
 
-class TestTranscribeBatch:
 
+class TestTranscribeBatch:
     @pytest.mark.asyncio
     async def test_success_returns_text(self):
         resp = AsyncMock()
@@ -636,8 +709,8 @@ class TestTranscribeBatch:
 
 # ── transcribe_chunk() ───────────────────────────────────────────────────────
 
-class TestTranscribeChunk:
 
+class TestTranscribeChunk:
     @pytest.mark.asyncio
     async def test_success_returns_text(self):
         resp = AsyncMock()
@@ -669,6 +742,7 @@ class TestTranscribeChunk:
         class _RaisingCtx:
             async def __aenter__(self):
                 raise asyncio.TimeoutError
+
             async def __aexit__(self, *a):
                 return False
 
@@ -695,8 +769,8 @@ class TestTranscribeChunk:
 
 # ── type_text() / abort_typing() ─────────────────────────────────────────────
 
-class TestTypeText:
 
+class TestTypeText:
     def test_empty_text_returns_immediately(self):
         with patch.object(ptt, "_launch_typing_proc") as mock_launch:
             ptt.type_text("", delay_ms=2)
@@ -708,8 +782,14 @@ class TestTypeText:
         mock_launch.assert_not_called()
 
     def test_wayland_ydotool_success(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_launch_typing_proc", return_value=0) as mock_launch:
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=0,
+            ) as mock_launch,
+        ):
             ptt.type_text("hello", delay_ms=4)
         assert mock_launch.call_count == 1
         cmd = mock_launch.call_args[0][0]
@@ -718,38 +798,68 @@ class TestTypeText:
         assert "hello" in cmd
 
     def test_wayland_falls_back_to_wtype(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_launch_typing_proc", side_effect=[None, 0]) as mock_launch:
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                side_effect=[None, 0],
+            ) as mock_launch,
+        ):
             ptt.type_text("hello", delay_ms=2)
         assert mock_launch.call_count == 2
         cmd = mock_launch.call_args_list[1][0][0]
         assert cmd[0] == "wtype"
 
     def test_wayland_falls_back_to_wl_copy(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_launch_typing_proc", side_effect=[None, None]), \
-             patch("subprocess.run") as mock_run:
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                side_effect=[None, None],
+            ),
+            patch("subprocess.run") as mock_run,
+        ):
             ptt.type_text("hello", delay_ms=2)
         cmd = mock_run.call_args[0][0]
         assert cmd[0] == "wl-copy"
         assert "hello" in cmd
 
     def test_wayland_all_fail(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_launch_typing_proc", side_effect=[None, None]), \
-             patch("subprocess.run", side_effect=FileNotFoundError):
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                side_effect=[None, None],
+            ),
+            patch("subprocess.run", side_effect=FileNotFoundError),
+        ):
             ptt.type_text("hello", delay_ms=2)  # should not raise
 
     def test_wayland_abort_stops_fallback(self):
         """rc < 0 (SIGTERM) must not fall through to wtype."""
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_launch_typing_proc", return_value=-15) as mock_launch:
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=-15,
+            ) as mock_launch,
+        ):
             ptt.type_text("hello", delay_ms=2)
         assert mock_launch.call_count == 1
 
     def test_x11_xdotool_success(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}), \
-             patch.object(ptt, "_launch_typing_proc", return_value=0) as mock_launch:
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=0,
+            ) as mock_launch,
+        ):
             ptt.type_text("hello", delay_ms=4)
         cmd = mock_launch.call_args[0][0]
         assert cmd[0] == "xdotool"
@@ -757,18 +867,29 @@ class TestTypeText:
         assert "hello" in cmd
 
     def test_x11_xdotool_not_found(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}), \
-             patch.object(ptt, "_launch_typing_proc", return_value=None):
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=None,
+            ),
+        ):
             ptt.type_text("hello", delay_ms=2)  # should not raise
 
     def test_x11_xdotool_fails(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}), \
-             patch.object(ptt, "_launch_typing_proc", return_value=1):
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=1,
+            ),
+        ):
             ptt.type_text("hello", delay_ms=2)  # should not raise
 
 
 class TestClipboardMode:
-
     def setup_method(self):
         ptt._set_clipboard_mode(False)
 
@@ -786,17 +907,27 @@ class TestClipboardMode:
 
     def test_type_text_uses_clipboard_when_mode_enabled(self):
         ptt._set_clipboard_mode(True)
-        with patch.object(ptt, "_type_text_clipboard") as mock_clip, \
-             patch.object(ptt, "_launch_typing_proc") as mock_launch:
+        with (
+            patch.object(ptt, "_type_text_clipboard") as mock_clip,
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+            ) as mock_launch,
+        ):
             ptt.type_text("hello", delay_ms=2)
         mock_clip.assert_called_once_with("hello")
         mock_launch.assert_not_called()
 
     def test_type_text_skips_clipboard_when_mode_disabled(self):
         ptt._set_clipboard_mode(False)
-        with patch.object(ptt, "_type_text_clipboard") as mock_clip, \
-             patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_launch_typing_proc", return_value=0):
+        with (
+            patch.object(ptt, "_type_text_clipboard") as mock_clip,
+            patch.dict(
+                os.environ,
+                {"XDG_SESSION_TYPE": "wayland"},
+            ),
+            patch.object(ptt, "_launch_typing_proc", return_value=0),
+        ):
             ptt.type_text("hello", delay_ms=2)
         mock_clip.assert_not_called()
 
@@ -815,13 +946,33 @@ class TestClipboardMode:
 
     def test_type_text_clipboard_wayland_paste_sequence(self):
         wl_proc = self._make_wl_popen_mock()
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_clipboard_save", return_value=b"old"), \
-             patch("subprocess.Popen", return_value=wl_proc) as mock_popen, \
-             patch.object(ptt, "_clipboard_write", return_value=True) as mock_write, \
-             patch.object(ptt, "_launch_typing_proc", return_value=0) as mock_launch, \
-             patch.object(ptt, "_is_terminal_focused", return_value=False), \
-             patch("time.sleep"):
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch.object(
+                ptt,
+                "_clipboard_save",
+                return_value=b"old",
+            ),
+            patch("subprocess.Popen", return_value=wl_proc) as mock_popen,
+            patch.object(
+                ptt,
+                "_clipboard_write",
+                return_value=True,
+            ) as mock_write,
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=0,
+            ) as mock_launch,
+            patch.object(
+                ptt,
+                "_is_terminal_focused",
+                return_value=False,
+            ),
+            patch(
+                "time.sleep",
+            ),
+        ):
             ptt._type_text_clipboard("hello")
         # wl-copy Popen started with --foreground (no --paste-once: clipboard mgr would consume it)
         popen_cmd = mock_popen.call_args[0][0]
@@ -840,13 +991,32 @@ class TestClipboardMode:
 
     def test_type_text_clipboard_wayland_terminal_uses_ctrl_shift_v(self):
         wl_proc = self._make_wl_popen_mock()
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_clipboard_save", return_value=None), \
-             patch("subprocess.Popen", return_value=wl_proc), \
-             patch.object(ptt, "_clipboard_clear"), \
-             patch.object(ptt, "_launch_typing_proc", return_value=0) as mock_launch, \
-             patch.object(ptt, "_is_terminal_focused", return_value=True), \
-             patch("time.sleep"):
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch.object(
+                ptt,
+                "_clipboard_save",
+                return_value=None,
+            ),
+            patch("subprocess.Popen", return_value=wl_proc),
+            patch.object(
+                ptt,
+                "_clipboard_clear",
+            ),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=0,
+            ) as mock_launch,
+            patch.object(
+                ptt,
+                "_is_terminal_focused",
+                return_value=True,
+            ),
+            patch(
+                "time.sleep",
+            ),
+        ):
             ptt._type_text_clipboard("hello")
         cmd = mock_launch.call_args[0][0]
         # Ctrl+Shift+V = 29, 42, 47
@@ -854,32 +1024,84 @@ class TestClipboardMode:
 
     def test_type_text_clipboard_wayland_clears_on_no_prior(self):
         wl_proc = self._make_wl_popen_mock()
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_clipboard_save", return_value=None), \
-             patch("subprocess.Popen", return_value=wl_proc), \
-             patch.object(ptt, "_clipboard_clear") as mock_clear, \
-             patch.object(ptt, "_launch_typing_proc", return_value=0), \
-             patch.object(ptt, "_is_terminal_focused", return_value=False), \
-             patch("time.sleep"):
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch.object(
+                ptt,
+                "_clipboard_save",
+                return_value=None,
+            ),
+            patch("subprocess.Popen", return_value=wl_proc),
+            patch.object(
+                ptt,
+                "_clipboard_clear",
+            ) as mock_clear,
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=0,
+            ),
+            patch.object(
+                ptt,
+                "_is_terminal_focused",
+                return_value=False,
+            ),
+            patch(
+                "time.sleep",
+            ),
+        ):
             ptt._type_text_clipboard("hello")
         mock_clear.assert_called_once()
 
     def test_type_text_clipboard_wayland_wlcopy_not_found_aborts(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch.object(ptt, "_clipboard_save", return_value=None), \
-             patch("subprocess.Popen", side_effect=FileNotFoundError), \
-             patch.object(ptt, "_is_terminal_focused", return_value=False), \
-             patch.object(ptt, "_launch_typing_proc") as mock_launch:
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch.object(
+                ptt,
+                "_clipboard_save",
+                return_value=None,
+            ),
+            patch("subprocess.Popen", side_effect=FileNotFoundError),
+            patch.object(
+                ptt,
+                "_is_terminal_focused",
+                return_value=False,
+            ),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+            ) as mock_launch,
+        ):
             ptt._type_text_clipboard("hello")
         mock_launch.assert_not_called()
 
     def test_type_text_clipboard_x11_paste_sequence(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}), \
-             patch.object(ptt, "_clipboard_save", return_value=b"old"), \
-             patch.object(ptt, "_clipboard_write", return_value=True) as mock_write, \
-             patch.object(ptt, "_launch_typing_proc", return_value=0) as mock_launch, \
-             patch.object(ptt, "_is_terminal_focused", return_value=False), \
-             patch("time.sleep"):
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}),
+            patch.object(
+                ptt,
+                "_clipboard_save",
+                return_value=b"old",
+            ),
+            patch.object(
+                ptt,
+                "_clipboard_write",
+                return_value=True,
+            ) as mock_write,
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=0,
+            ) as mock_launch,
+            patch.object(
+                ptt,
+                "_is_terminal_focused",
+                return_value=False,
+            ),
+            patch(
+                "time.sleep",
+            ),
+        ):
             ptt._type_text_clipboard("hello")
         cmd = mock_launch.call_args[0][0]
         assert cmd[0] == "xdotool"
@@ -888,13 +1110,32 @@ class TestClipboardMode:
         assert mock_write.call_count == 2  # write text + restore
 
     def test_type_text_clipboard_x11_terminal_uses_ctrl_shift_v(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}), \
-             patch.object(ptt, "_clipboard_save", return_value=None), \
-             patch.object(ptt, "_clipboard_write", return_value=True), \
-             patch.object(ptt, "_clipboard_clear"), \
-             patch.object(ptt, "_launch_typing_proc", return_value=0) as mock_launch, \
-             patch.object(ptt, "_is_terminal_focused", return_value=True), \
-             patch("time.sleep"):
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11"}),
+            patch.object(
+                ptt,
+                "_clipboard_save",
+                return_value=None,
+            ),
+            patch.object(ptt, "_clipboard_write", return_value=True),
+            patch.object(
+                ptt,
+                "_clipboard_clear",
+            ),
+            patch.object(
+                ptt,
+                "_launch_typing_proc",
+                return_value=0,
+            ) as mock_launch,
+            patch.object(
+                ptt,
+                "_is_terminal_focused",
+                return_value=True,
+            ),
+            patch(
+                "time.sleep",
+            ),
+        ):
             ptt._type_text_clipboard("hello")
         cmd = mock_launch.call_args[0][0]
         assert "ctrl+shift+v" in cmd
@@ -903,30 +1144,50 @@ class TestClipboardMode:
         for app_id in ["org.gnome.Terminal", "org.gnome.Console", "foot", "kitty"]:
             with patch.object(ptt, "get_focused_app", return_value=(app_id, "")):
                 assert ptt._is_terminal_focused()
-            with patch.object(ptt, "get_focused_app", return_value=(app_id + ".desktop", "")):
+            with patch.object(
+                ptt,
+                "get_focused_app",
+                return_value=(app_id + ".desktop", ""),
+            ):
                 assert ptt._is_terminal_focused()
 
     def test_is_terminal_focused_non_terminal(self):
-        with patch.object(ptt, "get_focused_app", return_value=("org.mozilla.Firefox", "")):
+        with patch.object(
+            ptt,
+            "get_focused_app",
+            return_value=("org.mozilla.Firefox", ""),
+        ):
             assert not ptt._is_terminal_focused()
 
     def test_clipboard_save_wayland_success(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch("subprocess.run") as mock_run:
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch(
+                "subprocess.run",
+            ) as mock_run,
+        ):
             mock_run.return_value = MagicMock(returncode=0, stdout=b"old text")
             result = ptt._clipboard_save()
         assert result == b"old text"
 
     def test_clipboard_save_wayland_empty(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch("subprocess.run") as mock_run:
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch(
+                "subprocess.run",
+            ) as mock_run,
+        ):
             mock_run.return_value = MagicMock(returncode=1, stdout=b"")
             result = ptt._clipboard_save()
         assert result is None
 
     def test_clipboard_write_wayland_success(self):
-        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}), \
-             patch("subprocess.run") as mock_run:
+        with (
+            patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}),
+            patch(
+                "subprocess.run",
+            ) as mock_run,
+        ):
             mock_run.return_value = MagicMock(returncode=0)
             result = ptt._clipboard_write("hello")
         assert result is True
@@ -935,7 +1196,6 @@ class TestClipboardMode:
 
 
 class TestAbortTyping:
-
     def test_terminates_running_proc(self):
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None  # still running
@@ -959,8 +1219,8 @@ class TestAbortTyping:
 
 # ── _try_dbus_call() ─────────────────────────────────────────────────────────
 
-class TestTryDbusCall:
 
+class TestTryDbusCall:
     def test_success_returns_unpacked(self):
         mock_result = MagicMock()
         mock_result.unpack.return_value = (True,)
@@ -971,13 +1231,20 @@ class TestTryDbusCall:
         mock_gio.bus_get_sync.return_value = mock_bus
         mock_glib = MagicMock()
 
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(Gio=mock_gio, GLib=mock_glib),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "gi": MagicMock(),
+                "gi.repository": MagicMock(Gio=mock_gio, GLib=mock_glib),
+            },
+        ):
             result = ptt._try_dbus_call(
-                "org.test", "/obj", "iface", "Method",
-                MagicMock(), "(b)"
+                "org.test",
+                "/obj",
+                "iface",
+                "Method",
+                MagicMock(),
+                "(b)",
             )
         assert result == (True,)
 
@@ -986,13 +1253,20 @@ class TestTryDbusCall:
         mock_gio.bus_get_sync.side_effect = Exception("D-Bus error")
         mock_glib = MagicMock()
 
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(Gio=mock_gio, GLib=mock_glib),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "gi": MagicMock(),
+                "gi.repository": MagicMock(Gio=mock_gio, GLib=mock_glib),
+            },
+        ):
             result = ptt._try_dbus_call(
-                "org.test", "/obj", "iface", "Method",
-                MagicMock(), "(b)"
+                "org.test",
+                "/obj",
+                "iface",
+                "Method",
+                MagicMock(),
+                "(b)",
             )
         assert result is None
 
@@ -1006,13 +1280,20 @@ class TestTryDbusCall:
         mock_gio.bus_get_sync.return_value = mock_bus
         mock_glib = MagicMock()
 
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(Gio=mock_gio, GLib=mock_glib),
-        }):
-            result = ptt._try_dbus_call(
-                "org.test", "/obj", "iface", "Method",
-                MagicMock(), None
+        with patch.dict(
+            "sys.modules",
+            {
+                "gi": MagicMock(),
+                "gi.repository": MagicMock(Gio=mock_gio, GLib=mock_glib),
+            },
+        ):
+            ptt._try_dbus_call(
+                "org.test",
+                "/obj",
+                "iface",
+                "Method",
+                MagicMock(),
+                None,
             )
         # Should pass None for reply_type
         call_args = mock_bus.call_sync.call_args[0]
@@ -1021,49 +1302,73 @@ class TestTryDbusCall:
 
 # ── try_dbus_handoff() ───────────────────────────────────────────────────────
 
-class TestTryDbusHandoff:
 
+class TestTryDbusHandoff:
     def test_first_bus_succeeds(self):
         mock_glib = MagicMock()
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", return_value=(True,)):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", return_value=(True,)),
+        ):
             result = ptt.try_dbus_handoff("hello")
         assert result is True
 
     def test_first_bus_fails_second_succeeds(self):
         mock_glib = MagicMock()
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", side_effect=[None, (True,)]):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", side_effect=[None, (True,)]),
+        ):
             result = ptt.try_dbus_handoff("hello")
         assert result is True
 
     def test_all_buses_fail(self):
         mock_glib = MagicMock()
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", return_value=None):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", return_value=None),
+        ):
             result = ptt.try_dbus_handoff("hello")
         assert result is False
 
     def test_result_false_treated_as_not_handled(self):
         mock_glib = MagicMock()
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", return_value=(False,)):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", return_value=(False,)),
+        ):
             result = ptt.try_dbus_handoff("hello")
         assert result is False
 
 
 # ── notify() ─────────────────────────────────────────────────────────────────
 
-class TestNotify:
 
+class TestNotify:
     def test_basic_notification(self, mock_subprocess):
         ptt.notify("Test", "Body text", timeout_ms=5000)
         args = mock_subprocess.call_args[0][0]
@@ -1087,8 +1392,8 @@ class TestNotify:
 
 # ── send_keys() ──────────────────────────────────────────────────────────────
 
-class TestSendKeys:
 
+class TestSendKeys:
     def test_wayland_ydotool(self, mock_subprocess):
         with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}):
             ptt.send_keys("29:1 30:1 30:0 29:0")
@@ -1147,8 +1452,8 @@ class TestSendKeys:
 
 # ── execute_voice_command() ──────────────────────────────────────────────────
 
-class TestExecuteVoiceCommand:
 
+class TestExecuteVoiceCommand:
     def test_exact_match(self):
         with patch.object(ptt, "send_keys") as mock_sk:
             result = ptt.execute_voice_command("select all")
@@ -1156,29 +1461,29 @@ class TestExecuteVoiceCommand:
         mock_sk.assert_called_once()
 
     def test_case_insensitive(self):
-        with patch.object(ptt, "send_keys") as mock_sk:
+        with patch.object(ptt, "send_keys"):
             result = ptt.execute_voice_command("Select All")
         assert result is True
 
     def test_strips_whitespace(self):
-        with patch.object(ptt, "send_keys") as mock_sk:
+        with patch.object(ptt, "send_keys"):
             result = ptt.execute_voice_command("  select all  ")
         assert result is True
 
     def test_strips_punctuation(self):
-        with patch.object(ptt, "send_keys") as mock_sk:
+        with patch.object(ptt, "send_keys"):
             result = ptt.execute_voice_command("select all.")
         assert result is True
 
     def test_strips_please_suffix(self):
-        with patch.object(ptt, "send_keys") as mock_sk:
+        with patch.object(ptt, "send_keys"):
             result = ptt.execute_voice_command("undo that please")
         assert result is True
 
     def test_strips_please_and_punctuation(self):
         # "Copy that please!" -> lower -> "copy that please!" -> rstrip -> "copy that please"
         # -> strip " please" -> "copy that" -> match
-        with patch.object(ptt, "send_keys") as mock_sk:
+        with patch.object(ptt, "send_keys"):
             result = ptt.execute_voice_command("Copy that please!")
         assert result is True
 
@@ -1223,15 +1528,23 @@ class TestExecuteVoiceCommand:
 
 # ── get_focused_app() ────────────────────────────────────────────────────────
 
-class TestGetFocusedApp:
 
+class TestGetFocusedApp:
     def test_first_bus_returns_result(self):
-        with patch.object(ptt, "_try_dbus_call", return_value=("app.desktop", "Window Title")):
+        with patch.object(
+            ptt,
+            "_try_dbus_call",
+            return_value=("app.desktop", "Window Title"),
+        ):
             result = ptt.get_focused_app()
         assert result == ("app.desktop", "Window Title")
 
     def test_falls_back_to_second_bus(self):
-        with patch.object(ptt, "_try_dbus_call", side_effect=[None, ("kde.desktop", "KDE App")]):
+        with patch.object(
+            ptt,
+            "_try_dbus_call",
+            side_effect=[None, ("kde.desktop", "KDE App")],
+        ):
             result = ptt.get_focused_app()
         assert result == ("kde.desktop", "KDE App")
 
@@ -1243,13 +1556,14 @@ class TestGetFocusedApp:
 
 # ── load_app_contexts() ─────────────────────────────────────────────────────
 
-class TestLoadAppContexts:
 
+class TestLoadAppContexts:
     def test_defaults_loaded(self):
         with patch("os.path.exists", return_value=False):
             contexts = ptt.load_app_contexts()
         assert "org.mozilla.Thunderbird.desktop" in contexts
-        assert contexts["org.mozilla.Thunderbird.desktop"] == {"tones": ["professional"]}
+        thunderbird = contexts["org.mozilla.Thunderbird.desktop"]
+        assert thunderbird == {"tones": ["professional"]}
 
     def test_config_file_merges(self, tmp_path):
         config_dir = tmp_path / ".config" / "wayvox"
@@ -1257,7 +1571,10 @@ class TestLoadAppContexts:
         custom = {"custom.app.desktop": {"tones": ["casual"]}}
         (config_dir / "app-contexts.json").write_text(json.dumps(custom))
 
-        with patch("os.path.expanduser", return_value=str(config_dir / "app-contexts.json")):
+        with patch(
+            "os.path.expanduser",
+            return_value=str(config_dir / "app-contexts.json"),
+        ):
             contexts = ptt.load_app_contexts()
         assert "custom.app.desktop" in contexts
         assert contexts["custom.app.desktop"] == {"tones": ["casual"]}
@@ -1270,7 +1587,10 @@ class TestLoadAppContexts:
         override = {"org.mozilla.Thunderbird.desktop": {"tones": ["casual"]}}
         (config_dir / "app-contexts.json").write_text(json.dumps(override))
 
-        with patch("os.path.expanduser", return_value=str(config_dir / "app-contexts.json")):
+        with patch(
+            "os.path.expanduser",
+            return_value=str(config_dir / "app-contexts.json"),
+        ):
             contexts = ptt.load_app_contexts()
         assert contexts["org.mozilla.Thunderbird.desktop"] == {"tones": ["casual"]}
 
@@ -1279,7 +1599,10 @@ class TestLoadAppContexts:
         config_dir.mkdir(parents=True)
         (config_dir / "app-contexts.json").write_text("NOT JSON{{{")
 
-        with patch("os.path.expanduser", return_value=str(config_dir / "app-contexts.json")):
+        with patch(
+            "os.path.expanduser",
+            return_value=str(config_dir / "app-contexts.json"),
+        ):
             contexts = ptt.load_app_contexts()
         # Should still have defaults
         assert "org.mozilla.Thunderbird.desktop" in contexts
@@ -1292,48 +1615,69 @@ class TestLoadAppContexts:
 
 # ── try_dbus_handoff_with_context() ──────────────────────────────────────────
 
-class TestTryDbusHandoffWithContext:
 
+class TestTryDbusHandoffWithContext:
     def test_first_bus_succeeds(self):
         mock_glib = MagicMock()
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", return_value=(True,)):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", return_value=(True,)),
+        ):
             result = ptt.try_dbus_handoff_with_context("text", '{"tones":["pro"]}')
         assert result is True
 
     def test_all_fail(self):
         mock_glib = MagicMock()
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", return_value=None):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", return_value=None),
+        ):
             result = ptt.try_dbus_handoff_with_context("text", "{}")
         assert result is False
 
     def test_false_result_not_handled(self):
         mock_glib = MagicMock()
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", return_value=(False,)):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", return_value=(False,)),
+        ):
             result = ptt.try_dbus_handoff_with_context("text", "{}")
         assert result is False
 
 
 # ── try_dbus_history_picker() ────────────────────────────────────────────────
 
-class TestTryDbusHistoryPicker:
 
+class TestTryDbusHistoryPicker:
     def test_empty_history_returns_false(self):
         history = MagicMock()
         history.recent.return_value = []
         mock_glib = MagicMock()
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "gi": MagicMock(),
+                "gi.repository": MagicMock(GLib=mock_glib),
+            },
+        ):
             result = ptt.try_dbus_history_picker(history)
         assert result is False
 
@@ -1342,10 +1686,16 @@ class TestTryDbusHistoryPicker:
         history.recent.return_value = [("hello", 1234567890.0), ("world", 1234567891.0)]
         mock_glib = MagicMock()
 
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", return_value=(True,)):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", return_value=(True,)),
+        ):
             result = ptt.try_dbus_history_picker(history)
         assert result is True
 
@@ -1354,13 +1704,17 @@ class TestTryDbusHistoryPicker:
         history.recent.return_value = [("hello", 100.0)]
         mock_glib = MagicMock()
 
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", return_value=(True,)) as mock_call:
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", return_value=(True,)),
+        ):
             ptt.try_dbus_history_picker(history)
-        # Verify the JSON was constructed properly
-        call_args = mock_call.call_args
         # The GLib.Variant call gets the JSON string
         variant_call = mock_glib.Variant.call_args
         items_json = variant_call[0][1][0]
@@ -1372,18 +1726,24 @@ class TestTryDbusHistoryPicker:
         history.recent.return_value = [("test", 1.0)]
         mock_glib = MagicMock()
 
-        with patch.dict("sys.modules", {
-            "gi": MagicMock(),
-            "gi.repository": MagicMock(GLib=mock_glib),
-        }), patch.object(ptt, "_try_dbus_call", return_value=None):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "gi": MagicMock(),
+                    "gi.repository": MagicMock(GLib=mock_glib),
+                },
+            ),
+            patch.object(ptt, "_try_dbus_call", return_value=None),
+        ):
             result = ptt.try_dbus_history_picker(history)
         assert result is False
 
 
 # ── play_sound() ─────────────────────────────────────────────────────────────
 
-class TestPlaySound:
 
+class TestPlaySound:
     def test_file_not_found_does_nothing(self, mock_popen):
         popen_cls, proc = mock_popen
         with patch("os.path.exists", return_value=False):
@@ -1391,36 +1751,56 @@ class TestPlaySound:
         popen_cls.assert_not_called()
 
     def test_pw_play_used_first(self):
-        with patch("os.path.exists", return_value=True), \
-             patch("subprocess.Popen") as mock_pop:
+        with (
+            patch("os.path.exists", return_value=True),
+            patch(
+                "subprocess.Popen",
+            ) as mock_pop,
+        ):
             ptt.play_sound("message")
         args = mock_pop.call_args[0][0]
         assert args[0] == "pw-play"
 
     def test_falls_back_to_paplay(self):
-        with patch("os.path.exists", return_value=True), \
-             patch("subprocess.Popen", side_effect=[FileNotFoundError, MagicMock()]) as mock_pop:
+        with (
+            patch("os.path.exists", return_value=True),
+            patch(
+                "subprocess.Popen",
+                side_effect=[FileNotFoundError, MagicMock()],
+            ) as mock_pop,
+        ):
             ptt.play_sound("message")
         assert mock_pop.call_count == 2
         args = mock_pop.call_args_list[1][0][0]
         assert args[0] == "paplay"
 
     def test_all_players_fail(self):
-        with patch("os.path.exists", return_value=True), \
-             patch("subprocess.Popen", side_effect=FileNotFoundError):
+        with (
+            patch("os.path.exists", return_value=True),
+            patch(
+                "subprocess.Popen",
+                side_effect=FileNotFoundError,
+            ),
+        ):
             ptt.play_sound("message")  # Should not raise
 
     def test_correct_path(self):
-        with patch("os.path.exists", return_value=True) as mock_exists, \
-             patch("subprocess.Popen"):
+        with (
+            patch("os.path.exists", return_value=True) as mock_exists,
+            patch(
+                "subprocess.Popen",
+            ),
+        ):
             ptt.play_sound("complete")
-        mock_exists.assert_called_with("/usr/share/sounds/freedesktop/stereo/complete.oga")
+        mock_exists.assert_called_with(
+            "/usr/share/sounds/freedesktop/stereo/complete.oga",
+        )
 
 
 # ── auto_punctuate() ─────────────────────────────────────────────────────────
 
-class TestAutoPunctuate:
 
+class TestAutoPunctuate:
     @pytest.mark.asyncio
     async def test_success(self):
         resp = AsyncMock()
@@ -1440,6 +1820,7 @@ class TestAutoPunctuate:
         class _RaisingSessionCtx:
             async def __aenter__(self):
                 raise Exception("connection error")
+
             async def __aexit__(self, *a):
                 return False
 
@@ -1462,8 +1843,8 @@ class TestAutoPunctuate:
 
 # ── translate_text() ─────────────────────────────────────────────────────────
 
-class TestTranslateText:
 
+class TestTranslateText:
     @pytest.mark.asyncio
     async def test_success(self):
         resp = AsyncMock()
@@ -1494,6 +1875,7 @@ class TestTranslateText:
         class _RaisingSessionCtx:
             async def __aenter__(self):
                 raise Exception("timeout")
+
             async def __aexit__(self, *a):
                 return False
 
@@ -1505,6 +1887,7 @@ class TestTranslateText:
 
 
 # ── format_dictation() ───────────────────────────────────────────────────────
+
 
 class TestFormatDictation:
     """Pure logic function — test every branch thoroughly."""
@@ -1649,8 +2032,8 @@ class TestFormatDictation:
 
 # ── TranscriptionHistory ─────────────────────────────────────────────────────
 
-class TestTranscriptionHistory:
 
+class TestTranscriptionHistory:
     def test_init_creates_db(self, tmp_path):
         with patch("os.path.expanduser", return_value=str(tmp_path / "wayvox")):
             hist = ptt.TranscriptionHistory(max_items=10)
@@ -1706,7 +2089,7 @@ class TestTranscriptionHistory:
     def test_creates_directory(self, tmp_path):
         deep_path = tmp_path / "a" / "b" / "wayvox"
         with patch("os.path.expanduser", return_value=str(deep_path)):
-            hist = ptt.TranscriptionHistory(max_items=10)
+            ptt.TranscriptionHistory(max_items=10)
         assert os.path.isdir(deep_path)
 
     def test_table_created_idempotent(self, tmp_path):
@@ -1722,21 +2105,49 @@ class TestTranscriptionHistory:
 
 # ── WORD_NUMS / ABBREVIATIONS constants ─────────────────────────────────────
 
-class TestWordNums:
 
+class TestWordNums:
     def test_all_basic_nums_present(self):
-        expected = {"zero", "one", "two", "three", "four", "five",
-                    "six", "seven", "eight", "nine", "ten"}
+        expected = {
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+        }
         assert expected.issubset(set(ptt.WORD_NUMS.keys()))
 
     def test_teens_present(self):
-        expected = {"eleven", "twelve", "thirteen", "fourteen", "fifteen",
-                    "sixteen", "seventeen", "eighteen", "nineteen"}
+        expected = {
+            "eleven",
+            "twelve",
+            "thirteen",
+            "fourteen",
+            "fifteen",
+            "sixteen",
+            "seventeen",
+            "eighteen",
+            "nineteen",
+        }
         assert expected.issubset(set(ptt.WORD_NUMS.keys()))
 
     def test_tens_present(self):
-        expected = {"twenty", "thirty", "forty", "fifty",
-                    "sixty", "seventy", "eighty", "ninety"}
+        expected = {
+            "twenty",
+            "thirty",
+            "forty",
+            "fifty",
+            "sixty",
+            "seventy",
+            "eighty",
+            "ninety",
+        }
         assert expected.issubset(set(ptt.WORD_NUMS.keys()))
 
     def test_values_correct(self):
@@ -1747,7 +2158,6 @@ class TestWordNums:
 
 
 class TestAbbreviations:
-
     def test_abbreviations_dict_not_empty(self):
         assert len(ptt.ABBREVIATIONS) > 0
 
@@ -1760,21 +2170,30 @@ class TestAbbreviations:
 
 
 class TestMuteOtherStreams:
-
     def _pactl_json(self, source_outputs):
         return json.dumps(source_outputs)
 
     def _output(self, index, pid, app="App", mute=False, volume="100%"):
         return {
-            "index": index, "mute": mute,
-            "volume": {"mono": {"value": 65536, "value_percent": volume, "db": "0.00 dB"}},
+            "index": index,
+            "mute": mute,
+            "volume": {
+                "mono": {
+                    "value": 65536,
+                    "value_percent": volume,
+                    "db": "0.00 dB",
+                },
+            },
             "properties": {"application.process.id": str(pid), "application.name": app},
         }
 
     @patch("subprocess.run")
     def test_mutes_other_streams(self, mock_run):
         outputs = [self._output(10, 100, "Chrome"), self._output(20, 200, "parec")]
-        mock_run.return_value = MagicMock(returncode=0, stdout=self._pactl_json(outputs))
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=self._pactl_json(outputs),
+        )
         result = ptt.mute_other_streams(200)
         assert len(result) == 1
         assert result[0][0] == 10  # index
@@ -1786,26 +2205,48 @@ class TestMuteOtherStreams:
     @patch("subprocess.run")
     def test_skips_own_pid(self, mock_run):
         outputs = [self._output(5, 999)]
-        mock_run.return_value = MagicMock(returncode=0, stdout=self._pactl_json(outputs))
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=self._pactl_json(outputs),
+        )
         result = ptt.mute_other_streams(999)
         assert result == []
         assert mock_run.call_count == 1
 
     @patch("subprocess.run")
     def test_skips_peak_detect(self, mock_run):
-        outputs = [{
-            "index": 7, "mute": False,
-            "volume": {"mono": {"value": 65536, "value_percent": "100%", "db": "0.00 dB"}},
-            "properties": {"application.process.id": "111", "application.name": "pavucontrol", "media.name": "Peak detect"},
-        }]
-        mock_run.return_value = MagicMock(returncode=0, stdout=self._pactl_json(outputs))
+        outputs = [
+            {
+                "index": 7,
+                "mute": False,
+                "volume": {
+                    "mono": {
+                        "value": 65536,
+                        "value_percent": "100%",
+                        "db": "0.00 dB",
+                    },
+                },
+                "properties": {
+                    "application.process.id": "111",
+                    "application.name": "pavucontrol",
+                    "media.name": "Peak detect",
+                },
+            }
+        ]
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=self._pactl_json(outputs),
+        )
         result = ptt.mute_other_streams(222)
         assert result == []
 
     @patch("subprocess.run")
     def test_records_already_muted(self, mock_run):
         outputs = [self._output(7, 111, "App", mute=True)]
-        mock_run.return_value = MagicMock(returncode=0, stdout=self._pactl_json(outputs))
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=self._pactl_json(outputs),
+        )
         result = ptt.mute_other_streams(222)
         assert result == [(7, True, "100%")]
 
@@ -1829,7 +2270,6 @@ class TestMuteOtherStreams:
 
 
 class TestUnmuteStreams:
-
     @patch("subprocess.run")
     def test_unmutes_previously_not_muted(self, mock_run):
         ptt.unmute_streams([(10, False, "100%"), (20, False, "80%")])
@@ -1864,13 +2304,13 @@ class TestUnmuteStreams:
     @patch("subprocess.run")
     def test_unmute_failure_logged(self, mock_run):
         import subprocess as sp
+
         mock_run.side_effect = sp.CalledProcessError(1, "pactl")
         ptt.unmute_streams([(10, False, "100%")])
         mock_run.assert_called_once()
 
 
 class TestLoadConfig:
-
     def test_returns_dict_from_valid_json(self, tmp_path):
         config_file = tmp_path / "settings.json"
         config_file.write_text('{"hotkey": "KEY_RIGHTALT", "vad-threshold": -30}')
@@ -1895,17 +2335,27 @@ class TestLoadConfig:
 
 
 class TestBuildSettings:
-
     def _make_args(self, **overrides):
         defaults = dict(
-            key="KEY_RIGHTCTRL", backend="openvino", recall_key="KEY_PAUSE",
-            language=None, vad_threshold=-40, stream_interval=3.0,
-            type_delay=4, auto_punctuate=False, translate_to=None,
-            no_sound=False, no_formatting=False, mute_other_streams=False,
-            no_commands=False, no_notify=False, port=5000,
+            key="KEY_RIGHTCTRL",
+            backend="openvino",
+            recall_key="KEY_PAUSE",
+            language=None,
+            vad_threshold=-40,
+            stream_interval=3.0,
+            type_delay=4,
+            auto_punctuate=False,
+            translate_to=None,
+            no_sound=False,
+            no_formatting=False,
+            mute_other_streams=False,
+            no_commands=False,
+            no_notify=False,
+            port=5000,
         )
         defaults.update(overrides)
         import argparse
+
         return argparse.Namespace(**defaults)
 
     def test_defaults_from_argparse(self):
@@ -1918,23 +2368,30 @@ class TestBuildSettings:
         assert settings["mute_streams"] is False
 
     def test_negative_flags_invert(self):
-        settings = ptt.build_settings(self._make_args(
-            no_sound=True, no_formatting=True, no_commands=True, no_notify=True
-        ))
+        settings = ptt.build_settings(
+            self._make_args(
+                no_sound=True,
+                no_formatting=True,
+                no_commands=True,
+                no_notify=True,
+            ),
+        )
         assert settings["sound"] is False
         assert settings["formatting"] is False
         assert settings["voice_commands"] is False
         assert settings["notifications"] is False
 
     def test_env_var_overrides(self):
-        with patch.dict(os.environ, {"WHISPER_LANGUAGE": "de", "WHISPER_NO_SOUND": "1"}):
+        with patch.dict(
+            os.environ,
+            {"WHISPER_LANGUAGE": "de", "WHISPER_NO_SOUND": "1"},
+        ):
             settings = ptt.build_settings(self._make_args())
         assert settings["language"] == "de"
         assert settings["sound"] is False
 
 
 class TestApplyConfig:
-
     def test_applies_matching_keys(self):
         settings = {"key": "KEY_RIGHTCTRL", "vad_threshold": -40, "sound": True}
         config = {"hotkey": "KEY_RIGHTALT", "vad-threshold": -30}
@@ -1984,7 +2441,6 @@ class TestApplyConfig:
 
 
 class TestWatchConfig:
-
     @pytest.mark.asyncio
     async def test_detects_file_change(self, tmp_path):
         config_file = tmp_path / "settings.json"
@@ -1994,12 +2450,17 @@ class TestWatchConfig:
         changes = []
 
         task = asyncio.create_task(
-            ptt.watch_config(settings, lambda s: changes.append(dict(s)),
-                           str(config_file), interval=0.1)
+            ptt.watch_config(
+                settings,
+                lambda s: changes.append(dict(s)),
+                str(config_file),
+                interval=0.1,
+            ),
         )
         await asyncio.sleep(0.2)
 
         import time as _t
+
         _t.sleep(0.05)
         config_file.write_text('{"hotkey": "KEY_RIGHTALT"}')
 
@@ -2019,8 +2480,12 @@ class TestWatchConfig:
         changes = []
 
         task = asyncio.create_task(
-            ptt.watch_config(settings, lambda s: changes.append(1),
-                           str(tmp_path / "nonexistent.json"), interval=0.1)
+            ptt.watch_config(
+                settings,
+                lambda s: changes.append(1),
+                str(tmp_path / "nonexistent.json"),
+                interval=0.1,
+            ),
         )
         await asyncio.sleep(0.3)
         task.cancel()
@@ -2040,12 +2505,17 @@ class TestWatchConfig:
         changes = []
 
         task = asyncio.create_task(
-            ptt.watch_config(settings, lambda s: changes.append(1),
-                           str(config_file), interval=0.1)
+            ptt.watch_config(
+                settings,
+                lambda s: changes.append(1),
+                str(config_file),
+                interval=0.1,
+            ),
         )
         await asyncio.sleep(0.2)
 
         import time as _t
+
         _t.sleep(0.05)
         config_file.write_text("INVALID JSON{{{")
 

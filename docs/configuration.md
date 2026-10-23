@@ -4,14 +4,14 @@
 
 Override defaults with `make install VAR=value`:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `WHISPER_DEVICE` | `auto` | OpenVINO device: `NPU`, `GPU`, or `CPU` |
-| `WHISPER_MODEL` | `whisper-small.en-fp16-ov` | Default OpenVINO model |
-| `WHISPER_CPP_DEVICE` | `NPU` | whisper.cpp encoder device |
-| `WHISPER_CPP_PORT` | `5001` | whisper.cpp server port |
-| `WHISPER_NPU_WORD_TIMESTAMPS` | `1` | Compile a wider NPU prompt slot |
-| `WHISPER_CACHE_DIR` | `~/.cache/wayvox` | Compiled model cache |
+| Variable                      | Default                    | Purpose                                 |
+| ----------------------------- | -------------------------- | --------------------------------------- |
+| `WHISPER_DEVICE`              | `auto`                     | OpenVINO device: `NPU`, `GPU`, or `CPU` |
+| `WHISPER_MODEL`               | `whisper-small.en-fp16-ov` | Default OpenVINO model                  |
+| `WHISPER_CPP_DEVICE`          | `NPU`                      | whisper.cpp encoder device              |
+| `WHISPER_CPP_PORT`            | `5001`                     | whisper.cpp server port                 |
+| `WHISPER_NPU_WORD_TIMESTAMPS` | `1`                        | Compile a wider NPU prompt slot         |
+| `WHISPER_CACHE_DIR`           | `~/.cache/wayvox`          | Compiled model cache                    |
 
 Example:
 
@@ -39,7 +39,7 @@ The optional whisper.cpp model cache is `~/.cache/whisper/`.
 
 ## Vocabulary
 
-Wayvox combines prompt biasing with regex replacements. The bundled vocabulary is installed at:
+Wayvox combines prompt biasing with regular expression replacements. The bundled vocabulary is installed at:
 
 ```text
 ~/.config/wayvox/vocabulary.json
@@ -59,7 +59,7 @@ Append `[cs]` for case-sensitive patterns. Invalid patterns are rejected on save
 
 With `WHISPER_NPU_WORD_TIMESTAMPS=1`, the NPU pipeline compiles `word_timestamps=True` and uses a 447-token prompt slot. The first model load can take several minutes. Later starts reuse `WHISPER_CACHE_DIR`.
 
-Set `WHISPER_NPU_WORD_TIMESTAMPS=0` to keep the four-token slot. Do not set `MAX_PROMPT_LEN`; the NPU encoder rejects that option. If an OpenVINO build rejects prompt bias arguments, Wayvox falls back to regex replacements and reports the state through `/health`.
+Set `WHISPER_NPU_WORD_TIMESTAMPS=0` to keep the four-token slot. Do not set `MAX_PROMPT_LEN`; the NPU encoder rejects that option. If an OpenVINO build rejects prompt bias arguments, Wayvox falls back to regular expression replacements and reports the state through `/health`.
 
 ## About and diagnostics
 

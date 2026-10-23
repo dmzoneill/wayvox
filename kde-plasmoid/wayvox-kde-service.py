@@ -11,23 +11,27 @@ Requires: PyQt6, dbus-python
 
 import json
 import logging
-import os
 import subprocess
 import sys
 import time
 import urllib.request
 
-from wayvox_paths import config_file
-
 import dbus
 import dbus.mainloop.glib
 import dbus.service
-from PyQt6.QtCore import QTimer, Qt, pyqtSignal, QObject, QThread
-from PyQt6.QtGui import QGuiApplication, QFont, QColor
+from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QGuiApplication
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QSizePolicy, QGraphicsDropShadowEffect
+    QApplication,
+    QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
+from wayvox_paths import config_file
 
 log = logging.getLogger("wayvox-kde")
 logging.basicConfig(level=logging.DEBUG, format="[wayvox-kde] %(message)s")
@@ -37,6 +41,7 @@ DEFAULT_TONES = ["diplomatic", "professional"]
 
 
 def load_config():
+    """Load config."""
     try:
         with open(CONFIG_PATH) as f:
             return json.load(f)
@@ -45,6 +50,7 @@ def load_config():
 
 
 def server_url(path, config=None):
+    """Server url."""
     if config is None:
         config = load_config()
     host = config.get("server-host", "127.0.0.1")
@@ -53,10 +59,14 @@ def server_url(path, config=None):
 
 
 def http_post(url, body):
+    """Http post."""
     data = json.dumps(body).encode()
-    req = urllib.request.Request(url, data=data,
-                                headers={"Content-Type": "application/json"},
-                                method="POST")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read())
@@ -66,18 +76,28 @@ def http_post(url, body):
 
 
 def type_text(text, delay_ms=4):
+    """Type text."""
     try:
-        subprocess.run(["ydotool", "type", "-d", str(delay_ms), "--", text],
-                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            ["ydotool", "type", "-d", str(delay_ms), "--", text],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except Exception as e:
         log.error("ydotool type failed: %s", e)
 
 
 def backspace_n(n):
+    """Backspace n."""
     for _ in range(n):
         try:
-            subprocess.run(["ydotool", "key", "14:1", "14:0"],
-                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["ydotool", "key", "14:1", "14:0"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         except Exception:
             pass
 
@@ -86,23 +106,27 @@ def backspace_n(n):
 # Overlay window — matches GNOME extension's floating card style
 # ---------------------------------------------------------------------------
 
+
 class OverlayCard(QPushButton):
     """A single card in the overlay."""
 
     def __init__(self, tone, text, ready=False, parent=None):
+        """Handle init  ."""
         super().__init__(parent)
         self.tone = tone
         self.card_text = text
         self.ready = ready
 
-        self.setCursor(Qt.CursorShape.PointingHandCursor if ready
-                       else Qt.CursorShape.ArrowCursor)
+        self.setCursor(
+            Qt.CursorShape.PointingHandCursor if ready else Qt.CursorShape.ArrowCursor,
+        )
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self.setFlat(True)
         self._update_style()
         self._build_layout(tone, text)
 
     def _build_layout(self, tone, text):
+        """Handle build layout."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(4)
@@ -119,6 +143,7 @@ class OverlayCard(QPushButton):
         layout.addWidget(self.text_label)
 
     def update_text(self, text):
+        """Update text."""
         self.card_text = text
         self.text_label.setText(text)
         self.ready = True
@@ -126,6 +151,7 @@ class OverlayCard(QPushButton):
         self._update_style()
 
     def _update_style(self):
+        """Handle update style."""
         self.setStyleSheet("""
             QPushButton {
                 background-color: rgba(255, 255, 255, 15);
@@ -141,9 +167,11 @@ class OverlayCard(QPushButton):
         """)
 
     def enterEvent(self, event):
+        """EnterEvent."""
         super().enterEvent(event)
 
     def leaveEvent(self, event):
+        """LeaveEvent."""
         super().leaveEvent(event)
 
 
@@ -153,12 +181,13 @@ class LanguageBuddyOverlay(QWidget):
     card_selected = pyqtSignal(str)
 
     def __init__(self):
+        """Handle init  ."""
         super().__init__()
         self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool |
-            Qt.WindowType.X11BypassWindowManagerHint
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.X11BypassWindowManagerHint,
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
@@ -192,13 +221,15 @@ class LanguageBuddyOverlay(QWidget):
         self._layout.setSpacing(8)
 
     def show_overlay(self, tones, original_text, timeout_sec=30):
+        """Show overlay."""
         self._clear()
 
         header_layout = QHBoxLayout()
         header = QLabel("Language Buddy")
         header.setFont(QFont("Sans", 10, QFont.Weight.Bold))
         header.setStyleSheet(
-            "color: rgba(255, 255, 255, 153); text-transform: uppercase; letter-spacing: 1px;")
+            "color: rgba(255, 255, 255, 153); text-transform: uppercase; letter-spacing: 1px;",
+        )
         header_layout.addWidget(header, stretch=1)
 
         dismiss_btn = QPushButton("✕")
@@ -241,6 +272,7 @@ class LanguageBuddyOverlay(QWidget):
             self._timer.start(timeout_sec * 1000)
 
     def update_card(self, tone, text):
+        """Update card."""
         card = self._cards.get(tone)
         if card:
             card.update_text(text)
@@ -248,15 +280,18 @@ class LanguageBuddyOverlay(QWidget):
             self._position()
 
     def _on_card_click(self, tone):
+        """Handle on card click."""
         card = self._cards.get(tone)
         if card and card.ready:
             self._on_select(card.card_text)
 
     def _on_select(self, text):
+        """Handle on select."""
         self.card_selected.emit(text)
         self.dismiss()
 
     def _position(self):
+        """Handle position."""
         screen = QGuiApplication.primaryScreen()
         if not screen:
             return
@@ -267,6 +302,7 @@ class LanguageBuddyOverlay(QWidget):
         self.move(x, y)
 
     def _clear(self):
+        """Handle clear."""
         self._timer.stop()
         self._cards.clear()
         while self._layout.count():
@@ -280,6 +316,7 @@ class LanguageBuddyOverlay(QWidget):
                         sub.widget().deleteLater()
 
     def dismiss(self):
+        """Dismiss."""
         self._timer.stop()
         self.hide()
         self._clear()
@@ -289,12 +326,13 @@ class HistoryOverlay(QWidget):
     """Floating overlay for transcription history recall."""
 
     def __init__(self):
+        """Handle init  ."""
         super().__init__()
         self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool |
-            Qt.WindowType.X11BypassWindowManagerHint
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.X11BypassWindowManagerHint,
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
@@ -327,13 +365,15 @@ class HistoryOverlay(QWidget):
         self._layout.setSpacing(8)
 
     def show_history(self, items, timeout_sec=10):
+        """Show history."""
         self._clear()
 
         header_layout = QHBoxLayout()
         header = QLabel("Transcription History")
         header.setFont(QFont("Sans", 10, QFont.Weight.Bold))
         header.setStyleSheet(
-            "color: rgba(255, 255, 255, 153); text-transform: uppercase; letter-spacing: 1px;")
+            "color: rgba(255, 255, 255, 153); text-transform: uppercase; letter-spacing: 1px;",
+        )
         header_layout.addWidget(header, stretch=1)
 
         dismiss_btn = QPushButton("✕")
@@ -373,6 +413,7 @@ class HistoryOverlay(QWidget):
             self._timer.start(timeout_sec * 1000)
 
     def _time_ago(self, ts):
+        """Handle time ago."""
         diff = time.time() - ts
         if diff < 60:
             return "just now"
@@ -383,10 +424,12 @@ class HistoryOverlay(QWidget):
         return f"{int(diff // 86400)}d ago"
 
     def _on_select(self, text):
+        """Handle on select."""
         self.dismiss()
         type_text(text)
 
     def _position(self):
+        """Handle position."""
         screen = QGuiApplication.primaryScreen()
         if not screen:
             return
@@ -397,6 +440,7 @@ class HistoryOverlay(QWidget):
         self.move(x, y)
 
     def _clear(self):
+        """Handle clear."""
         self._timer.stop()
         while self._layout.count():
             item = self._layout.takeAt(0)
@@ -409,6 +453,7 @@ class HistoryOverlay(QWidget):
                         sub.widget().deleteLater()
 
     def dismiss(self):
+        """Dismiss."""
         self._timer.stop()
         self.hide()
         self._clear()
@@ -418,16 +463,21 @@ class HistoryOverlay(QWidget):
 # Rewrite worker — runs HTTP calls off the main thread
 # ---------------------------------------------------------------------------
 
+
 class RewriteWorker(QObject):
+    """RewriteWorker."""
+
     finished = pyqtSignal(str, str)  # tone, text
 
     def __init__(self, text, tone, config):
+        """Handle init  ."""
         super().__init__()
         self.text = text
         self.tone = tone
         self.config = config
 
     def run(self):
+        """Run."""
         url = server_url("/rewrite", self.config)
         result = http_post(url, {"text": self.text, "tones": [self.tone]})
         if result and "variants" in result:
@@ -442,17 +492,24 @@ class RewriteWorker(QObject):
 # D-Bus service
 # ---------------------------------------------------------------------------
 
+
 class LanguageBuddyService(dbus.service.Object):
+    """LanguageBuddyService."""
 
     def __init__(self, bus_name, overlay, history_overlay):
+        """Handle init  ."""
         super().__init__(bus_name, "/com/whisper/LanguageBuddy")
         self._overlay = overlay
         self._history_overlay = history_overlay
         self._threads = []
 
-    @dbus.service.method("com.whisper.LanguageBuddy",
-                         in_signature="s", out_signature="b")
+    @dbus.service.method(
+        "com.whisper.LanguageBuddy",
+        in_signature="s",
+        out_signature="b",
+    )
     def HandleTranscription(self, text):
+        """HandleTranscription."""
         config = load_config()
         if not config.get("language-buddy-enabled", False):
             return False
@@ -460,9 +517,13 @@ class LanguageBuddyService(dbus.service.Object):
         self._process(str(text), config)
         return True
 
-    @dbus.service.method("com.whisper.LanguageBuddy",
-                         in_signature="ss", out_signature="b")
+    @dbus.service.method(
+        "com.whisper.LanguageBuddy",
+        in_signature="ss",
+        out_signature="b",
+    )
     def HandleTranscriptionWithContext(self, text, context_json):
+        """HandleTranscriptionWithContext."""
         config = load_config()
         if not config.get("language-buddy-enabled", False):
             return False
@@ -475,9 +536,13 @@ class LanguageBuddyService(dbus.service.Object):
         self._process(str(text), config, tones)
         return True
 
-    @dbus.service.method("com.whisper.LanguageBuddy",
-                         in_signature="", out_signature="ss")
+    @dbus.service.method(
+        "com.whisper.LanguageBuddy",
+        in_signature="",
+        out_signature="ss",
+    )
     def GetFocusedApp(self):
+        """GetFocusedApp."""
         try:
             bus = dbus.SessionBus()
             kwin = bus.get_object("org.kde.KWin", "/KWin")
@@ -489,27 +554,48 @@ class LanguageBuddyService(dbus.service.Object):
         try:
             bus = dbus.SessionBus()
             obj = bus.get_object("org.kde.KWin", "/Scripting")
-            result = obj.Get("org.kde.KWin.Scripting", "activeClient",
-                             dbus_interface="org.freedesktop.DBus.Properties")
-            return (str(result.get("resourceClass", "")),
-                    str(result.get("caption", "")))
+            result = obj.Get(
+                "org.kde.KWin.Scripting",
+                "activeClient",
+                dbus_interface="org.freedesktop.DBus.Properties",
+            )
+            return (
+                str(result.get("resourceClass", "")),
+                str(result.get("caption", "")),
+            )
         except Exception:
             pass
 
         try:
-            output = subprocess.check_output(
-                ["xdotool", "getactivewindow", "getwindowclassname"],
-                timeout=2, stderr=subprocess.DEVNULL).decode().strip()
-            title = subprocess.check_output(
-                ["xdotool", "getactivewindow", "getwindowname"],
-                timeout=2, stderr=subprocess.DEVNULL).decode().strip()
+            output = (
+                subprocess.check_output(
+                    ["xdotool", "getactivewindow", "getwindowclassname"],
+                    timeout=2,
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
+            title = (
+                subprocess.check_output(
+                    ["xdotool", "getactivewindow", "getwindowname"],
+                    timeout=2,
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
             return (output, title)
         except Exception:
             return ("", "")
 
-    @dbus.service.method("com.whisper.LanguageBuddy",
-                         in_signature="s", out_signature="b")
+    @dbus.service.method(
+        "com.whisper.LanguageBuddy",
+        in_signature="s",
+        out_signature="b",
+    )
     def ShowHistoryPicker(self, items_json):
+        """ShowHistoryPicker."""
         try:
             items = json.loads(str(items_json))
             if not items:
@@ -521,6 +607,7 @@ class LanguageBuddyService(dbus.service.Object):
             return False
 
     def _process(self, text, config, tones=None):
+        """Handle process."""
         bypass = config.get("language-buddy-bypass", False)
         timeout_sec = config.get("language-buddy-timeout", 30)
 
@@ -535,12 +622,17 @@ class LanguageBuddyService(dbus.service.Object):
         original_text = text
 
         if bypass:
+
             def on_select(selected):
+                """On select."""
                 if selected != original_text:
                     backspace_n(len(original_text))
                     type_text(selected)
+
         else:
+
             def on_select(selected):
+                """On select."""
                 type_text(selected)
 
         self._overlay.card_selected.disconnect()
@@ -563,7 +655,9 @@ class LanguageBuddyService(dbus.service.Object):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
+    """Main."""
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     app = QApplication(sys.argv)
     app.setApplicationName("wayvox-kde")
@@ -581,9 +675,11 @@ def main():
 
     # Integrate GLib main loop with Qt
     from gi.repository import GLib
+
     glib_loop = GLib.MainLoop()
 
     def glib_tick():
+        """Glib tick."""
         ctx = glib_loop.get_context()
         while ctx.pending():
             ctx.iteration(False)

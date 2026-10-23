@@ -17,12 +17,12 @@ desktop integrations without sending audio to a cloud service.
 
 ## Visual system
 
-| Token | Value | Use |
-| --- | --- | --- |
-| Ink | `#101827` | Backgrounds, dark surfaces |
-| Electric cyan | `#5DE4FF` | Active state, primary accent |
-| Warm coral | `#FF8066` | Recording, attention, secondary accent |
-| Cloud | `#F4F7FB` | Light surfaces and text |
+| Token         | Value     | Use                                    |
+| ------------- | --------- | -------------------------------------- |
+| Ink           | `#101827` | Backgrounds, dark surfaces             |
+| Electric cyan | `#5DE4FF` | Active state, primary accent           |
+| Warm coral    | `#FF8066` | Recording, attention, secondary accent |
+| Cloud         | `#F4F7FB` | Light surfaces and text                |
 
 The mark is a `V` shaped like a voice waveform: two rising strokes frame a
 central signal. It stays legible as a 16px symbolic icon and scales into a

@@ -16,6 +16,7 @@ import json
 import logging
 import math
 import os
+import re
 import signal
 import sqlite3
 import struct
@@ -39,32 +40,43 @@ CHANNELS = 1
 SAMPLE_WIDTH = 2  # 16-bit
 HOLD_THRESHOLD = 1.5
 CORRECTION_WINDOW = 3.0
+
+
+def _is_correction_tap(hold_duration, last_wav_bytes, now, last_transcription_end):
+    """True for a short tap that should re-transcribe the previous utterance."""
+    quick_tap = hold_duration < 0.5 and last_wav_bytes
+    recent = (now - last_transcription_end) < CORRECTION_WINDOW
+    return quick_tap and recent
+
+
 MODEL_SIZE_ORDER = ["tiny", "base", "small", "medium", "large"]
 
 CONFIG_PATH = str(CONFIG_DIR / "settings.json")
 LEGACY_CONFIG_PATH = str(LEGACY_CONFIG_DIR / "settings.json")
 
 CONFIG_KEY_MAP = {
-    "hotkey":                       ("key", str, "KEY_RIGHTCTRL"),
-    "backend":                      ("backend", str, "openvino"),
-    "recall-key":                   ("recall_key", str, "KEY_PAUSE"),
-    "language":                     ("language", str, ""),
-    "vad-threshold":                ("vad_threshold", int, -40),
-    "stream-interval":              ("stream_interval", float, 3.0),
-    "auto-punctuate":               ("auto_punctuate", bool, False),
-    "translate-to":                 ("translate_to", str, ""),
-    "audio-feedback-enabled":       ("sound", bool, True),
+    "hotkey": ("key", str, "KEY_RIGHTCTRL"),
+    "backend": ("backend", str, "openvino"),
+    "recall-key": ("recall_key", str, "KEY_PAUSE"),
+    "language": ("language", str, ""),
+    "vad-threshold": ("vad_threshold", int, -40),
+    "stream-interval": ("stream_interval", float, 3.0),
+    "auto-punctuate": ("auto_punctuate", bool, False),
+    "translate-to": ("translate_to", str, ""),
+    "audio-feedback-enabled": ("sound", bool, True),
     "dictation-formatting-enabled": ("formatting", bool, True),
-    "mute-other-streams":           ("mute_streams", bool, False),
-    "voice-commands-enabled":       ("voice_commands", bool, True),
-    "notifications-enabled":        ("notifications", bool, True),
-    "clipboard-mode":               ("clipboard_mode", bool, False),
+    "mute-other-streams": ("mute_streams", bool, False),
+    "voice-commands-enabled": ("voice_commands", bool, True),
+    "notifications-enabled": ("notifications", bool, True),
+    "clipboard-mode": ("clipboard_mode", bool, False),
 }
 
 
 def load_config(path=CONFIG_PATH):
     """Load settings from JSON config file. Returns empty dict on failure."""
-    if path == CONFIG_PATH and not os.path.exists(path) and os.path.exists(LEGACY_CONFIG_PATH):
+    missing_current = path == CONFIG_PATH and not os.path.exists(path)
+    has_legacy = os.path.exists(LEGACY_CONFIG_PATH)
+    if missing_current and has_legacy:
         path = LEGACY_CONFIG_PATH
     try:
         with open(path) as f:
@@ -73,21 +85,37 @@ def load_config(path=CONFIG_PATH):
         return {}
 
 
+def _env_text(name):
+    """Return an environment variable, or an empty string when unset."""
+    return os.environ.get(name, "")
+
+
+def _env_enabled(name):
+    """True when an environment variable is the string ``1``."""
+    return _env_text(name) == "1"
+
+
 def build_settings(args):
     """Build initial settings dict from CLI args and env vars."""
+    language = args.language or _env_text("WHISPER_LANGUAGE") or ""
+    translate_to = args.translate_to or _env_text("WHISPER_TRANSLATE_TO") or ""
+    auto_punctuate = args.auto_punctuate or _env_enabled("WHISPER_AUTO_PUNCTUATE")
+    sound_disabled = args.no_sound or _env_enabled("WHISPER_NO_SOUND")
+    formatting_disabled = args.no_formatting or _env_enabled("WHISPER_NO_FORMATTING")
+    mute_streams = args.mute_other_streams or _env_enabled("WHISPER_MUTE_STREAMS")
     return {
         "key": args.key,
         "backend": args.backend,
         "recall_key": args.recall_key,
-        "language": args.language or os.environ.get("WHISPER_LANGUAGE", "") or "",
+        "language": language,
         "vad_threshold": args.vad_threshold,
         "stream_interval": args.stream_interval,
         "type_delay": args.type_delay,
-        "auto_punctuate": args.auto_punctuate or os.environ.get("WHISPER_AUTO_PUNCTUATE", "") == "1",
-        "translate_to": args.translate_to or os.environ.get("WHISPER_TRANSLATE_TO", "") or "",
-        "sound": not (args.no_sound or os.environ.get("WHISPER_NO_SOUND", "") == "1"),
-        "formatting": not (args.no_formatting or os.environ.get("WHISPER_NO_FORMATTING", "") == "1"),
-        "mute_streams": args.mute_other_streams or os.environ.get("WHISPER_MUTE_STREAMS", "") == "1",
+        "auto_punctuate": auto_punctuate,
+        "translate_to": translate_to,
+        "sound": not sound_disabled,
+        "formatting": not formatting_disabled,
+        "mute_streams": mute_streams,
         "voice_commands": not args.no_commands,
         "notifications": not args.no_notify,
         "clipboard_mode": False,
@@ -104,7 +132,12 @@ def apply_config(settings, config):
             except (ValueError, TypeError):
                 continue
             if settings.get(internal_key) != new_val:
-                log.info("Setting %s: %s -> %s", internal_key, settings.get(internal_key), new_val)
+                log.info(
+                    "Setting %s: %s -> %s",
+                    internal_key,
+                    settings.get(internal_key),
+                    new_val,
+                )
                 settings[internal_key] = new_val
                 changed = True
     return changed
@@ -135,26 +168,26 @@ async def watch_config(settings, on_change, path=CONFIG_PATH, interval=2.0):
 
 
 VOICE_COMMANDS = {
-    "select all":       [("key", "29:1 30:1 30:0 29:0")],
-    "undo that":        [("key", "29:1 44:1 44:0 29:0")],
-    "redo that":        [("key", "29:1 21:1 21:0 29:0")],
-    "copy that":        [("key", "29:1 46:1 46:0 29:0")],
-    "paste that":       [("key", "29:1 47:1 47:0 29:0")],
-    "cut that":         [("key", "29:1 45:1 45:0 29:0")],
-    "new line":         [("key", "28:1 28:0")],
-    "new paragraph":    [("key", "28:1 28:0"), ("key", "28:1 28:0")],
-    "tab key":          [("key", "15:1 15:0")],
-    "delete that":      [("key", "14:1 14:0")],
-    "delete word":      [("key", "29:1 14:1 14:0 29:0")],
-    "period":           [("type", ".")],
-    "comma":            [("type", ",")],
-    "question mark":    [("type", "?")],
+    "select all": [("key", "29:1 30:1 30:0 29:0")],
+    "undo that": [("key", "29:1 44:1 44:0 29:0")],
+    "redo that": [("key", "29:1 21:1 21:0 29:0")],
+    "copy that": [("key", "29:1 46:1 46:0 29:0")],
+    "paste that": [("key", "29:1 47:1 47:0 29:0")],
+    "cut that": [("key", "29:1 45:1 45:0 29:0")],
+    "new line": [("key", "28:1 28:0")],
+    "new paragraph": [("key", "28:1 28:0"), ("key", "28:1 28:0")],
+    "tab key": [("key", "15:1 15:0")],
+    "delete that": [("key", "14:1 14:0")],
+    "delete word": [("key", "29:1 14:1 14:0 29:0")],
+    "period": [("type", ".")],
+    "comma": [("type", ",")],
+    "question mark": [("type", "?")],
     "exclamation mark": [("type", "!")],
-    "exclamation point":[("type", "!")],
-    "colon":            [("type", ":")],
-    "semicolon":        [("type", ";")],
-    "open quote":       [("type", "\"")],
-    "close quote":      [("type", "\"")],
+    "exclamation point": [("type", "!")],
+    "colon": [("type", ":")],
+    "semicolon": [("type", ";")],
+    "open quote": [("type", '"')],
+    "close quote": [("type", '"')],
 }
 
 DEFAULT_APP_CONTEXTS = {
@@ -174,7 +207,9 @@ def _list_source_outputs():
     try:
         result = subprocess.run(
             ["pactl", "--format=json", "list", "source-outputs"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode != 0:
             log.warning("pactl list source-outputs failed: %s", result.stderr.strip())
@@ -217,13 +252,17 @@ def mute_other_streams(own_pid):
         try:
             subprocess.run(
                 ["pactl", "set-source-output-mute", str(idx), "1"],
-                check=True, timeout=2,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                check=True,
+                timeout=2,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             subprocess.run(
                 ["pactl", "set-source-output-volume", str(idx), "0%"],
-                check=True, timeout=2,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                check=True,
+                timeout=2,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             muted.append((idx, was_muted, orig_vol))
             log.info("Muted recording stream: %s (index %d)", app, idx)
@@ -238,14 +277,18 @@ def unmute_streams(muted_list):
         try:
             subprocess.run(
                 ["pactl", "set-source-output-volume", str(idx), orig_vol],
-                check=True, timeout=2,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                check=True,
+                timeout=2,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             if not was_muted:
                 subprocess.run(
                     ["pactl", "set-source-output-mute", str(idx), "0"],
-                    check=True, timeout=2,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    check=True,
+                    timeout=2,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
             log.info("Restored recording stream (index %d)", idx)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
@@ -264,6 +307,7 @@ def find_keyboards(exclude=(), target_key_name=None):
     included so its events reach the event loop.
     """
     import evdev
+
     kbds = []
     for path in evdev.list_devices():
         if path in exclude:
@@ -298,6 +342,7 @@ class AudioBuffer:
     """Continuously reads from parec into a growing buffer so the pipe never blocks."""
 
     def __init__(self, proc):
+        """Handle init  ."""
         self.proc = proc
         self._buf = bytearray()
         self._lock = threading.Lock()
@@ -305,6 +350,7 @@ class AudioBuffer:
         self._thread.start()
 
     def _reader(self):
+        """Handle reader."""
         while True:
             chunk = self.proc.stdout.read(4096)
             if not chunk:
@@ -370,7 +416,7 @@ def trim_silence(raw_audio, threshold_db=-40, pad_frames=3, frame_ms=20):
     first_speech = -1
     last_speech = -1
     for i in range(n_frames):
-        chunk = raw_audio[i * frame_size:(i + 1) * frame_size]
+        chunk = raw_audio[i * frame_size : (i + 1) * frame_size]
         samples = struct.unpack(f"<{len(chunk) // 2}h", chunk)
         rms = math.sqrt(sum(s * s for s in samples) / len(samples))
         db = 20 * math.log10(rms / 32768) if rms > 0 else -100
@@ -390,6 +436,7 @@ def trim_silence(raw_audio, threshold_db=-40, pad_frames=3, frame_ms=20):
 async def transcribe_stream(wav_bytes, port, type_delay_ms, language=None):
     """Send audio to whisper server, stream results, and type each chunk immediately."""
     import aiohttp
+
     url = f"http://127.0.0.1:{port}/transcribe/stream"
     if language:
         url += f"?language={language}"
@@ -399,7 +446,10 @@ async def transcribe_stream(wav_bytes, port, type_delay_ms, language=None):
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, data=wav_bytes) as resp:
                 if resp.status != 200:
-                    log.warning("Stream endpoint returned %d, falling back to batch", resp.status)
+                    log.warning(
+                        "Stream endpoint returned %d, falling back to batch",
+                        resp.status,
+                    )
                     return await transcribe_batch(wav_bytes, port, language=language)
                 async for line in resp.content:
                     line = line.decode("utf-8").strip()
@@ -423,6 +473,7 @@ async def transcribe_stream(wav_bytes, port, type_delay_ms, language=None):
 async def transcribe_batch(wav_bytes, port, language=None):
     """Send audio to whisper server and return text (non-streaming fallback)."""
     import aiohttp
+
     url = f"http://127.0.0.1:{port}/transcribe"
     if language:
         url += f"?language={language}"
@@ -443,6 +494,7 @@ async def transcribe_batch(wav_bytes, port, language=None):
 async def transcribe_chunk(wav_bytes, port, language=None):
     """Send audio chunk to whisper-cpp server for partial transcription."""
     import aiohttp
+
     url = f"http://127.0.0.1:{port}/transcribe/stream"
     if language:
         url += f"?language={language}"
@@ -467,6 +519,7 @@ _clipboard_mode = False
 
 
 def _set_clipboard_mode(enabled):
+    """Handle set clipboard mode."""
     global _clipboard_mode
     _clipboard_mode = bool(enabled)
 
@@ -476,7 +529,11 @@ def _launch_typing_proc(cmd):
     Returns None if the binary is not found."""
     global _typing_proc
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except FileNotFoundError:
         return None
     with _typing_lock:
@@ -506,8 +563,10 @@ def _clipboard_save():
         except FileNotFoundError:
             return None
     else:
-        for cmd in [["xclip", "-selection", "clipboard", "-o"],
-                    ["xsel", "--clipboard", "--output"]]:
+        for cmd in [
+            ["xclip", "-selection", "clipboard", "-o"],
+            ["xsel", "--clipboard", "--output"],
+        ]:
             try:
                 r = subprocess.run(cmd, capture_output=True)
                 if r.returncode == 0:
@@ -529,8 +588,10 @@ def _clipboard_write(data):
         except (FileNotFoundError, subprocess.CalledProcessError):
             return False
     else:
-        for cmd in [["xclip", "-selection", "clipboard"],
-                    ["xsel", "--clipboard", "--input"]]:
+        for cmd in [
+            ["xclip", "-selection", "clipboard"],
+            ["xsel", "--clipboard", "--input"],
+        ]:
             try:
                 subprocess.run(cmd, input=data, check=True)
                 return True
@@ -540,6 +601,7 @@ def _clipboard_write(data):
 
 
 def _clipboard_clear():
+    """Handle clipboard clear."""
     session_type = os.environ.get("XDG_SESSION_TYPE", "")
     if session_type == "wayland":
         try:
@@ -568,6 +630,7 @@ TERMINAL_APP_IDS = {
 
 
 def _is_terminal_focused():
+    """Handle is terminal focused."""
     app_id, _ = get_focused_app()
     return app_id.removesuffix(".desktop") in TERMINAL_APP_IDS
 
@@ -581,6 +644,7 @@ def _type_text_clipboard(text):
     manually after the paste completes.
     """
     import time as _time
+
     old = _clipboard_save()
     session_type = os.environ.get("XDG_SESSION_TYPE", "")
     is_terminal = _is_terminal_focused()
@@ -596,7 +660,9 @@ def _type_text_clipboard(text):
             wl_proc.stdin.write(text.encode())
             wl_proc.stdin.close()
         except FileNotFoundError:
-            log.error("wl-copy not found — install wl-clipboard for clipboard paste mode")
+            log.error(
+                "wl-copy not found — install wl-clipboard for clipboard paste mode",
+            )
             return
 
         # Give compositor time to register the clipboard offer before sending paste key.
@@ -656,7 +722,7 @@ def type_text(text, delay_ms=2):
     if session_type == "wayland":
         for tool, cmd in [
             ("ydotool", ["ydotool", "type", "-d", str(delay_ms), "--", text]),
-            ("wtype",   ["wtype",   "-d", str(delay_ms), "--", text]),
+            ("wtype", ["wtype", "-d", str(delay_ms), "--", text]),
         ]:
             rc = _launch_typing_proc(cmd)
             if rc is None:
@@ -667,12 +733,22 @@ def type_text(text, delay_ms=2):
             log.warning("%s failed (rc=%d), trying next", tool, rc)
         try:
             subprocess.run(["wl-copy", text], check=True)
-            log.info("Text copied to clipboard (install ydotool or wtype for direct typing)")
+            log.info(
+                "Text copied to clipboard (install ydotool or wtype for direct typing)",
+            )
         except (FileNotFoundError, subprocess.CalledProcessError) as e:
             log.error("All typing methods failed: %s", e)
     else:
         rc = _launch_typing_proc(
-            ["xdotool", "type", "--delay", str(delay_ms), "--clearmodifiers", "--", text]
+            [
+                "xdotool",
+                "type",
+                "--delay",
+                str(delay_ms),
+                "--clearmodifiers",
+                "--",
+                text,
+            ],
         )
         if rc is None:
             log.error("xdotool not found")
@@ -684,7 +760,8 @@ async def type_text_async(text, delay_ms=2):
     """Run type_text in a thread executor so the asyncio event loop stays responsive.
     This lets Escape key events be processed and abort_typing() called mid-output."""
     await asyncio.get_running_loop().run_in_executor(
-        None, lambda: type_text(text, delay_ms=delay_ms)
+        None,
+        lambda: type_text(text, delay_ms=delay_ms),
     )
 
 
@@ -692,31 +769,43 @@ def _try_dbus_call(bus_name, object_path, interface, method, args_variant, reply
     """Try a single D-Bus call, returning the unpacked result or None."""
     try:
         from gi.repository import Gio, GLib
+
         bus = Gio.bus_get_sync(Gio.BusType.SESSION)
         result = bus.call_sync(
-            bus_name, object_path, interface, method,
-            args_variant, GLib.VariantType(reply_type) if reply_type else None,
-            Gio.DBusCallFlags.NONE, 500, None
+            bus_name,
+            object_path,
+            interface,
+            method,
+            args_variant,
+            GLib.VariantType(reply_type) if reply_type else None,
+            Gio.DBusCallFlags.NONE,
+            500,
+            None,
         )
         return result.unpack()
     except Exception:
         return None
 
 
-DBUS_BUS_NAMES = ['org.gnome.Shell', 'com.whisper.LanguageBuddy']
-DBUS_OBJECT_PATH = '/com/whisper/LanguageBuddy'
-DBUS_INTERFACE = 'com.whisper.LanguageBuddy'
+DBUS_BUS_NAMES = ["org.gnome.Shell", "com.whisper.LanguageBuddy"]
+DBUS_OBJECT_PATH = "/com/whisper/LanguageBuddy"
+DBUS_INTERFACE = "com.whisper.LanguageBuddy"
 
 
 def try_dbus_handoff(text):
     """Try to hand off transcription to desktop extension via D-Bus.
     Tries GNOME Shell first, then standalone KDE service."""
     from gi.repository import GLib
+
     for bus_name in DBUS_BUS_NAMES:
         result = _try_dbus_call(
-            bus_name, DBUS_OBJECT_PATH, DBUS_INTERFACE,
-            'HandleTranscription',
-            GLib.Variant('(s)', (text,)), '(b)')
+            bus_name,
+            DBUS_OBJECT_PATH,
+            DBUS_INTERFACE,
+            "HandleTranscription",
+            GLib.Variant("(s)", (text,)),
+            "(b)",
+        )
         if result and result[0]:
             return True
     return False
@@ -728,7 +817,12 @@ def notify(summary, body="", timeout_ms=3000):
     if body:
         cmd.append(body)
     try:
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            cmd,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
 
@@ -738,17 +832,36 @@ def send_keys(scancode_str):
     session_type = os.environ.get("XDG_SESSION_TYPE", "")
     if session_type == "wayland":
         try:
-            subprocess.run(["ydotool", "key"] + scancode_str.split(), check=True,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["ydotool", "key"] + scancode_str.split(),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         except (FileNotFoundError, subprocess.CalledProcessError):
             pass
     else:
         key_map = {
-            "29:1": "ctrl+", "29:0": "", "30:1": "a", "30:0": "",
-            "44:1": "z", "44:0": "", "21:1": "y", "21:0": "",
-            "46:1": "c", "46:0": "", "47:1": "v", "47:0": "",
-            "45:1": "x", "45:0": "", "28:1": "Return", "28:0": "",
-            "15:1": "Tab", "15:0": "", "14:1": "BackSpace", "14:0": "",
+            "29:1": "ctrl+",
+            "29:0": "",
+            "30:1": "a",
+            "30:0": "",
+            "44:1": "z",
+            "44:0": "",
+            "21:1": "y",
+            "21:0": "",
+            "46:1": "c",
+            "46:0": "",
+            "47:1": "v",
+            "47:0": "",
+            "45:1": "x",
+            "45:0": "",
+            "28:1": "Return",
+            "28:0": "",
+            "15:1": "Tab",
+            "15:0": "",
+            "14:1": "BackSpace",
+            "14:0": "",
         }
         keys = []
         combo = ""
@@ -761,8 +874,12 @@ def send_keys(scancode_str):
                 combo = ""
         for key in keys:
             try:
-                subprocess.run(["xdotool", "key", key], check=True,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(
+                    ["xdotool", "key", key],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
             except (FileNotFoundError, subprocess.CalledProcessError):
                 pass
 
@@ -787,6 +904,7 @@ class TranscriptionHistory:
     """Rolling log of recent transcriptions in SQLite."""
 
     def __init__(self, max_items=50):
+        """Handle init  ."""
         self.max_items = max_items
         db_dir = os.path.expanduser("~/.config/wayvox")
         os.makedirs(db_dir, exist_ok=True)
@@ -794,22 +912,27 @@ class TranscriptionHistory:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS history "
-                "(id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, timestamp REAL NOT NULL)"
+                "(id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, timestamp REAL NOT NULL)",
             )
 
     def add(self, text):
+        """Add."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("INSERT INTO history (text, timestamp) VALUES (?, ?)",
-                         (text, _time.time()))
             conn.execute(
-                "DELETE FROM history WHERE id NOT IN "
-                "(SELECT id FROM history ORDER BY id DESC LIMIT ?)",
-                (self.max_items,))
+                "INSERT INTO history (text, timestamp) VALUES (?, ?)",
+                (text, _time.time()),
+            )
+            conn.execute(
+                "DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)",
+                (self.max_items,),
+            )
 
     def recent(self, n=10):
+        """Recent."""
         with sqlite3.connect(self.db_path) as conn:
             return conn.execute(
-                "SELECT text, timestamp FROM history ORDER BY id DESC LIMIT ?", (n,)
+                "SELECT text, timestamp FROM history ORDER BY id DESC LIMIT ?",
+                (n,),
             ).fetchall()
 
 
@@ -818,8 +941,13 @@ def get_focused_app():
     Tries GNOME Shell first, then standalone KDE service."""
     for bus_name in DBUS_BUS_NAMES:
         result = _try_dbus_call(
-            bus_name, DBUS_OBJECT_PATH, DBUS_INTERFACE,
-            'GetFocusedApp', None, '(ss)')
+            bus_name,
+            DBUS_OBJECT_PATH,
+            DBUS_INTERFACE,
+            "GetFocusedApp",
+            None,
+            "(ss)",
+        )
         if result:
             return result
     return ("", "")
@@ -845,11 +973,16 @@ def load_app_contexts():
 def try_dbus_handoff_with_context(text, context_json):
     """Hand off transcription with per-app context to desktop extension."""
     from gi.repository import GLib
+
     for bus_name in DBUS_BUS_NAMES:
         result = _try_dbus_call(
-            bus_name, DBUS_OBJECT_PATH, DBUS_INTERFACE,
-            'HandleTranscriptionWithContext',
-            GLib.Variant('(ss)', (text, context_json)), '(b)')
+            bus_name,
+            DBUS_OBJECT_PATH,
+            DBUS_INTERFACE,
+            "HandleTranscriptionWithContext",
+            GLib.Variant("(ss)", (text, context_json)),
+            "(b)",
+        )
         if result and result[0]:
             return True
     return False
@@ -858,15 +991,20 @@ def try_dbus_handoff_with_context(text, context_json):
 def try_dbus_history_picker(history):
     """Ask desktop extension to show history picker overlay."""
     from gi.repository import GLib
+
     items = history.recent(10)
     if not items:
         return False
     items_json = json.dumps([{"text": t, "ts": ts} for t, ts in items])
     for bus_name in DBUS_BUS_NAMES:
         result = _try_dbus_call(
-            bus_name, DBUS_OBJECT_PATH, DBUS_INTERFACE,
-            'ShowHistoryPicker',
-            GLib.Variant('(s)', (items_json,)), '(b)')
+            bus_name,
+            DBUS_OBJECT_PATH,
+            DBUS_INTERFACE,
+            "ShowHistoryPicker",
+            GLib.Variant("(s)", (items_json,)),
+            "(b)",
+        )
         if result and result[0]:
             return True
     return False
@@ -875,13 +1013,21 @@ def try_dbus_history_picker(history):
 def play_sound(sound_name):
     """Play a sound non-blocking. Falls back to bundled sounds if system theme missing."""
     system_path = f"/usr/share/sounds/freedesktop/stereo/{sound_name}.oga"
-    bundled_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sounds", f"{sound_name}.oga")
+    bundled_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "sounds",
+        f"{sound_name}.oga",
+    )
     path = system_path if os.path.exists(system_path) else bundled_path
     if not os.path.exists(path):
         return
     for player in ("pw-play", "paplay"):
         try:
-            subprocess.Popen([player, path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(
+                [player, path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             return
         except FileNotFoundError:
             continue
@@ -890,6 +1036,7 @@ def play_sound(sound_name):
 async def auto_punctuate(text, port):
     """Post-process text through LLM for punctuation."""
     import aiohttp
+
     url = f"http://127.0.0.1:{port}/punctuate"
     try:
         async with aiohttp.ClientSession() as session:
@@ -905,10 +1052,14 @@ async def auto_punctuate(text, port):
 async def translate_text(text, target_language, port):
     """Translate text through LLM."""
     import aiohttp
+
     url = f"http://127.0.0.1:{port}/translate"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json={"text": text, "target_language": target_language}) as resp:
+            async with session.post(
+                url,
+                json={"text": text, "target_language": target_language},
+            ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     return data.get("text", text).strip()
@@ -917,20 +1068,44 @@ async def translate_text(text, target_language, port):
     return text
 
 
-import re
-
 WORD_NUMS = {
-    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
-    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
-    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
-    "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+    "thirty": 30,
+    "forty": 40,
+    "fifty": 50,
+    "sixty": 60,
+    "seventy": 70,
+    "eighty": 80,
+    "ninety": 90,
 }
 
 ABBREVIATIONS = {
-    r"\bmister\b": "Mr.", r"\bmissus\b": "Mrs.", r"\bdoctor\b": "Dr.",
-    r"\bversus\b": "vs.", r"\bet cetera\b": "etc.", r"\bfor example\b": "e.g.",
+    r"\bmister\b": "Mr.",
+    r"\bmissus\b": "Mrs.",
+    r"\bdoctor\b": "Dr.",
+    r"\bversus\b": "vs.",
+    r"\bet cetera\b": "etc.",
+    r"\bfor example\b": "e.g.",
     r"\bthat is\b": "i.e.",
 }
 
@@ -943,19 +1118,25 @@ def format_dictation(text):
     text = re.sub(
         r"\b(\w+)\s+at\s+(\w+)\s+dot\s+(\w+)\b",
         lambda m: f"{m.group(1)}@{m.group(2)}.{m.group(3)}",
-        text, flags=re.IGNORECASE
+        text,
+        flags=re.IGNORECASE,
     )
 
     text = re.sub(
         r"\bw w w dot\s+(\w+)\s+dot\s+(\w+)\b",
         lambda m: f"www.{m.group(1)}.{m.group(2)}",
-        text, flags=re.IGNORECASE
+        text,
+        flags=re.IGNORECASE,
     )
 
     for word, num in sorted(WORD_NUMS.items(), key=lambda x: -len(x[0])):
         text = re.sub(rf"\b{word}\b", str(num), text, flags=re.IGNORECASE)
 
-    text = re.sub(r"\b(\d+)\s+hundred\s+(\d+)\b", lambda m: str(int(m.group(1)) * 100 + int(m.group(2))), text)
+    text = re.sub(
+        r"\b(\d+)\s+hundred\s+(\d+)\b",
+        lambda m: str(int(m.group(1)) * 100 + int(m.group(2))),
+        text,
+    )
     text = re.sub(r"\b(\d+)\s+hundred\b", lambda m: str(int(m.group(1)) * 100), text)
 
     if text:
@@ -965,34 +1146,94 @@ def format_dictation(text):
 
 
 async def main():
+    """Main."""
     parser = argparse.ArgumentParser(description="Push-to-talk voice dictation")
-    parser.add_argument("--key", default="KEY_RIGHTCTRL", help="Hold key name (default: KEY_RIGHTCTRL)")
-    parser.add_argument("--port", type=int, default=5000, help="Whisper server port (default: 5000)")
-    parser.add_argument("--type-delay", type=int, default=4, help="ydotool inter-key delay in ms (default: 4)")
-    parser.add_argument("--backend", choices=["openvino", "whisper-cpp"], default="openvino",
-                        help="Transcription backend (default: openvino)")
-    parser.add_argument("--stream-interval", type=float, default=3.0,
-                        help="Seconds between streaming transcription updates (default: 3.0)")
-    parser.add_argument("--vad-threshold", type=int, default=-40,
-                        help="VAD silence threshold in dB (default: -40)")
-    parser.add_argument("--no-notify", action="store_true", default=False,
-                        help="Disable desktop notifications after transcription")
-    parser.add_argument("--no-commands", action="store_true", default=False,
-                        help="Disable voice command detection")
-    parser.add_argument("--recall-key", default="KEY_PAUSE",
-                        help="Key to show transcription history picker (default: KEY_PAUSE)")
-    parser.add_argument("--language", default=None,
-                        help="Language code for multilingual models (e.g., 'de', 'fr')")
-    parser.add_argument("--auto-punctuate", action="store_true", default=False,
-                        help="Post-process transcriptions with LLM for punctuation")
-    parser.add_argument("--translate-to", default=None,
-                        help="Translate transcriptions to target language (e.g., 'French')")
-    parser.add_argument("--no-sound", action="store_true", default=False,
-                        help="Disable audio feedback sounds")
-    parser.add_argument("--no-formatting", action="store_true", default=False,
-                        help="Disable dictation formatting (numbers, abbreviations)")
-    parser.add_argument("--mute-other-streams", action="store_true", default=False,
-                        help="Mute other recording streams while recording (e.g. video call mic)")
+    parser.add_argument(
+        "--key",
+        default="KEY_RIGHTCTRL",
+        help="Hold key name (default: KEY_RIGHTCTRL)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=5000,
+        help="Whisper server port (default: 5000)",
+    )
+    parser.add_argument(
+        "--type-delay",
+        type=int,
+        default=4,
+        help="ydotool inter-key delay in ms (default: 4)",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["openvino", "whisper-cpp"],
+        default="openvino",
+        help="Transcription backend (default: openvino)",
+    )
+    parser.add_argument(
+        "--stream-interval",
+        type=float,
+        default=3.0,
+        help="Seconds between streaming transcription updates (default: 3.0)",
+    )
+    parser.add_argument(
+        "--vad-threshold",
+        type=int,
+        default=-40,
+        help="VAD silence threshold in dB (default: -40)",
+    )
+    parser.add_argument(
+        "--no-notify",
+        action="store_true",
+        default=False,
+        help="Disable desktop notifications after transcription",
+    )
+    parser.add_argument(
+        "--no-commands",
+        action="store_true",
+        default=False,
+        help="Disable voice command detection",
+    )
+    parser.add_argument(
+        "--recall-key",
+        default="KEY_PAUSE",
+        help="Key to show transcription history picker (default: KEY_PAUSE)",
+    )
+    parser.add_argument(
+        "--language",
+        default=None,
+        help="Language code for multilingual models (e.g., 'de', 'fr')",
+    )
+    parser.add_argument(
+        "--auto-punctuate",
+        action="store_true",
+        default=False,
+        help="Post-process transcriptions with LLM for punctuation",
+    )
+    parser.add_argument(
+        "--translate-to",
+        default=None,
+        help="Translate transcriptions to target language (e.g., 'French')",
+    )
+    parser.add_argument(
+        "--no-sound",
+        action="store_true",
+        default=False,
+        help="Disable audio feedback sounds",
+    )
+    parser.add_argument(
+        "--no-formatting",
+        action="store_true",
+        default=False,
+        help="Disable dictation formatting (numbers, abbreviations)",
+    )
+    parser.add_argument(
+        "--mute-other-streams",
+        action="store_true",
+        default=False,
+        help="Mute other recording streams while recording (e.g. video call mic)",
+    )
     args = parser.parse_args()
 
     settings = build_settings(args)
@@ -1012,6 +1253,7 @@ async def main():
     derived = {}
 
     def update_derived(s):
+        """Update derived."""
         new_key = getattr(ecodes, s["key"], None)
         if new_key:
             derived["target_key"] = new_key
@@ -1027,11 +1269,18 @@ async def main():
 
     kbds = find_keyboards(target_key_name=settings["key"])
     if not kbds:
-        log.error("No keyboard found in /dev/input/ — run with sudo or add user to 'input' group")
+        log.error(
+            "No keyboard found in /dev/input/ — run with sudo or add user to 'input' group",
+        )
         sys.exit(1)
 
-    log.info("Listening on %s (key: %s, backend: %s, port: %d)",
-             ", ".join(k.name for k in kbds), settings["key"], settings["backend"], derived["backend_port"])
+    log.info(
+        "Listening on %s (key: %s, backend: %s, port: %d)",
+        ", ".join(k.name for k in kbds),
+        settings["key"],
+        settings["backend"],
+        derived["backend_port"],
+    )
     log.info("Hold %s to record, release to transcribe and type", settings["key"])
 
     history = TranscriptionHistory()
@@ -1057,15 +1306,22 @@ async def main():
         if session_type == "wayland":
             try:
                 for _ in range(n):
-                    subprocess.run(["ydotool", "key", "14:1", "14:0"], check=True,
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(
+                        ["ydotool", "key", "14:1", "14:0"],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
             except (FileNotFoundError, subprocess.CalledProcessError):
                 pass
         else:
-            subprocess.run(["xdotool", "key", "--repeat", str(n), "BackSpace"],
-                           check=True)
+            subprocess.run(
+                ["xdotool", "key", "--repeat", str(n), "BackSpace"],
+                check=True,
+            )
 
     def backspace_typed():
+        """Backspace typed."""
         nonlocal typed_char_count
         backspace_n(typed_char_count)
         typed_char_count = 0
@@ -1092,7 +1348,11 @@ async def main():
                 await asyncio.sleep(0.5)
                 continue
             log.info("Streaming chunk: %.1fs of audio", duration)
-            text = await transcribe_chunk(wav_bytes, port, language=settings["language"] or None)
+            text = await transcribe_chunk(
+                wav_bytes,
+                port,
+                language=settings["language"] or None,
+            )
             if text and text != streamed_text:
                 common = 0
                 for a, b in zip(streamed_text, text):
@@ -1108,7 +1368,12 @@ async def main():
                 if new_suffix:
                     await type_text_async(new_suffix, delay_ms=delay_ms)
                     typed_char_count += len(new_suffix)
-                log.info("Live (-%d +%d): %s", chars_to_erase, len(new_suffix), text[:80])
+                log.info(
+                    "Live (-%d +%d): %s",
+                    chars_to_erase,
+                    len(new_suffix),
+                    text[:80],
+                )
                 streamed_text = text
             await asyncio.sleep(interval)
 
@@ -1126,7 +1391,10 @@ async def main():
                 pass
             streaming_task = None
 
-        wav_bytes = stop_recording(recording_proc, vad_threshold=settings["vad_threshold"])
+        wav_bytes = stop_recording(
+            recording_proc,
+            vad_threshold=settings["vad_threshold"],
+        )
         recording_proc = None
 
         if muted_streams:
@@ -1149,7 +1417,11 @@ async def main():
 
         # Toggle mode with whisper-cpp: live diff correction (no D-Bus handoff)
         if settings["backend"] == "whisper-cpp" and mode == "toggle":
-            text = await transcribe_chunk(wav_bytes, port, language=settings["language"] or None)
+            text = await transcribe_chunk(
+                wav_bytes,
+                port,
+                language=settings["language"] or None,
+            )
             if text:
                 common = 0
                 for a, b in zip(streamed_text, text):
@@ -1163,7 +1435,12 @@ async def main():
                     backspace_n(chars_to_erase)
                 if new_suffix:
                     await type_text_async(new_suffix, delay_ms=delay_ms)
-                log.info("Final (-%d +%d): %s", chars_to_erase, len(new_suffix), text[:80])
+                log.info(
+                    "Final (-%d +%d): %s",
+                    chars_to_erase,
+                    len(new_suffix),
+                    text[:80],
+                )
             typed_char_count = 0
             streamed_text = ""
             mode = None
@@ -1172,9 +1449,17 @@ async def main():
         # Hold mode: transcribe, try D-Bus handoff, fallback to direct typing
         log.info("Transcribing...")
         if settings["backend"] == "whisper-cpp":
-            text = await transcribe_chunk(wav_bytes, port, language=settings["language"] or None)
+            text = await transcribe_chunk(
+                wav_bytes,
+                port,
+                language=settings["language"] or None,
+            )
         else:
-            text = await transcribe_batch(wav_bytes, port, language=settings["language"] or None)
+            text = await transcribe_batch(
+                wav_bytes,
+                port,
+                language=settings["language"] or None,
+            )
 
         if not text:
             log.info("No transcription returned")
@@ -1239,8 +1524,7 @@ async def main():
 
     async def correct_last_transcription():
         """Re-transcribe last audio with a larger model and replace typed text."""
-        nonlocal last_wav_bytes, last_typed_text, mode
-        import aiohttp
+        nonlocal last_typed_text, mode
 
         if not last_wav_bytes or not last_typed_text:
             mode = None
@@ -1269,7 +1553,9 @@ async def main():
         current_default = None
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"http://127.0.0.1:{derived['backend_port']}/model/default") as resp:
+                async with session.get(
+                    f"http://127.0.0.1:{derived['backend_port']}/model/default",
+                ) as resp:
                     if resp.status == 200:
                         current_default = (await resp.json()).get("model", "")
         except Exception:
@@ -1331,9 +1617,11 @@ async def main():
     event_queue = asyncio.Queue()
 
     async def pump_events(dev):
+        """Pump events."""
         try:
             async for ev in dev.async_read_loop():
-                if ev.type == ecodes.EV_KEY and ev.code == ecodes.KEY_ESC and ev.value == 1:
+                escape_key = ev.type == ecodes.EV_KEY and ev.code == ecodes.KEY_ESC
+                if escape_key and ev.value == 1:
                     abort_typing()
                 await event_queue.put(ev)
         except OSError:
@@ -1351,13 +1639,18 @@ async def main():
         /dev/input/eventX node, so a one-shot scan at startup goes deaf after
         the first switch-away.
         """
-        pumps = {dev.path: asyncio.create_task(pump_events(dev)) for dev in initial_kbds}
+        pumps = {}
+        for dev in initial_kbds:
+            pumps[dev.path] = asyncio.create_task(pump_events(dev))
         while True:
             await asyncio.sleep(interval)
             for path, task in list(pumps.items()):
                 if task.done():
                     del pumps[path]
-            for dev in find_keyboards(exclude=pumps.keys(), target_key_name=settings["key"]):
+            for dev in find_keyboards(
+                exclude=pumps.keys(),
+                target_key_name=settings["key"],
+            ):
                 log.info("Keyboard %s connected (%s)", dev.name, dev.path)
                 pumps[dev.path] = asyncio.create_task(pump_events(dev))
 
@@ -1370,13 +1663,21 @@ async def main():
         key_event = evdev.categorize(event)
 
         # Recall key — show history picker
-        if derived["recall_key"] and key_event.scancode == derived["recall_key"] and key_event.keystate == key_event.key_down:
+        if (
+            derived["recall_key"]
+            and key_event.scancode == derived["recall_key"]
+            and key_event.keystate == key_event.key_down
+        ):
             if not try_dbus_history_picker(history):
                 items = history.recent(1)
                 if items:
                     try:
-                        subprocess.run(["wl-copy", items[0][0]], check=True,
-                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(
+                            ["wl-copy", items[0][0]],
+                            check=True,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
                         notify("Whisper", "Last transcription copied to clipboard")
                     except (FileNotFoundError, subprocess.CalledProcessError):
                         pass
@@ -1401,7 +1702,10 @@ async def main():
             elif mode == "toggle":
                 # Second tap in toggle mode — stop and finalize
                 log.info("Toggle stop")
-                await finalize_recording(derived["backend_port"], settings["type_delay"])
+                await finalize_recording(
+                    derived["backend_port"],
+                    settings["type_delay"],
+                )
 
         elif key_event.keystate == key_event.key_up:
             if recording_proc is None:
@@ -1412,12 +1716,20 @@ async def main():
             if mode == "toggle":
                 # Key up in toggle mode — ignore, we're waiting for second tap
                 pass
-            elif hold_duration < 0.5 and last_wav_bytes and (now - last_transcription_end) < CORRECTION_WINDOW:
+            elif _is_correction_tap(
+                hold_duration,
+                last_wav_bytes,
+                now,
+                last_transcription_end,
+            ):
                 # Quick tap shortly after transcription — correction mode
                 mode = "correction"
                 log.info("Correction mode — re-transcribing with larger model")
                 if recording_proc:
-                    stop_recording(recording_proc, vad_threshold=settings["vad_threshold"])
+                    stop_recording(
+                        recording_proc,
+                        vad_threshold=settings["vad_threshold"],
+                    )
                     recording_proc = None
                 if muted_streams:
                     unmute_streams(muted_streams)
@@ -1429,14 +1741,21 @@ async def main():
                 log.info("Toggle mode — tap again to stop (held %.1fs)", hold_duration)
                 if settings["backend"] == "whisper-cpp":
                     streaming_task = asyncio.create_task(
-                        streaming_loop_live(recording_proc, derived["backend_port"],
-                                           settings["stream_interval"], settings["type_delay"])
+                        streaming_loop_live(
+                            recording_proc,
+                            derived["backend_port"],
+                            settings["stream_interval"],
+                            settings["type_delay"],
+                        ),
                     )
             else:
                 # Long hold — finalize immediately
                 mode = "hold"
                 log.info("Hold mode — transcribing (held %.1fs)", hold_duration)
-                await finalize_recording(derived["backend_port"], settings["type_delay"])
+                await finalize_recording(
+                    derived["backend_port"],
+                    settings["type_delay"],
+                )
 
 
 if __name__ == "__main__":

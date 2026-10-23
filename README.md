@@ -1,6 +1,7 @@
+# Wayvox
+
 <div align="center">
   <img src="branding/wayvox-mark.svg" alt="Wayvox" width="180"/>
-  <h1>Wayvox</h1>
   <p><strong>Private voice, local power.</strong></p>
   <p>On-device dictation for Linux. Speak naturally, keep audio local, and type into any focused Wayland application.</p>
   <p>

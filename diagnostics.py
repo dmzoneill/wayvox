@@ -41,6 +41,7 @@ _MODULES = ("intel_vpu", "xe", "i915", "nvidia")
 
 
 def app_version():
+    """App version."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version")
     try:
         text = open(path, encoding="utf-8").read()
@@ -53,6 +54,7 @@ def app_version():
 
 
 def _dist_version(name):
+    """Handle dist version."""
     try:
         from importlib.metadata import version
 
@@ -62,6 +64,7 @@ def _dist_version(name):
 
 
 def _read(path):
+    """Handle read."""
     try:
         with open(path, encoding="utf-8") as handle:
             return handle.read().strip()
@@ -70,6 +73,7 @@ def _read(path):
 
 
 def _run(cmd):
+    """Handle run."""
     try:
         result = subprocess.run(
             cmd,
@@ -84,6 +88,7 @@ def _run(cmd):
 
 
 def _jsonable(value):
+    """Handle jsonable."""
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     if isinstance(value, (list, tuple)):
@@ -92,6 +97,7 @@ def _jsonable(value):
 
 
 def _cpu_model():
+    """Handle cpu model."""
     for line in _read("/proc/cpuinfo").splitlines():
         if line.lower().startswith("model name"):
             return line.split(":", 1)[1].strip()
@@ -113,17 +119,20 @@ def parse_lspci_mm(text):
         kind = _pci_kind_from_class(klass)
         if not kind:
             continue
-        rows.append({
-            "kind": kind,
-            "slot": slot,
-            "class": klass,
-            "vendor": vendor,
-            "device": device,
-        })
+        rows.append(
+            {
+                "kind": kind,
+                "slot": slot,
+                "class": klass,
+                "vendor": vendor,
+                "device": device,
+            },
+        )
     return rows
 
 
 def _pci_kind_from_class(klass):
+    """Handle pci kind from class."""
     text = klass.lower()
     if "vga" in text or "3d controller" in text or "display" in text:
         return "GPU"
@@ -136,6 +145,7 @@ def _pci_kind_from_class(klass):
 
 
 def pci_from_sysfs(base="/sys/bus/pci/devices"):
+    """Pci from sysfs."""
     if not os.path.isdir(base):
         return []
     rows = []
@@ -148,17 +158,20 @@ def pci_from_sysfs(base="/sys/bus/pci/devices"):
             continue
         vendor = _read(os.path.join(base, slot, "vendor"))
         device = _read(os.path.join(base, slot, "device"))
-        rows.append({
-            "kind": kind,
-            "slot": slot,
-            "class": code,
-            "vendor": vendor,
-            "device": device,
-        })
+        rows.append(
+            {
+                "kind": kind,
+                "slot": slot,
+                "class": code,
+                "vendor": vendor,
+                "device": device,
+            },
+        )
     return rows
 
 
 def _pci_devices():
+    """Handle pci devices."""
     parsed = parse_lspci_mm(_run(["lspci", "-mm", "-nn"]))
     if parsed:
         return parsed
@@ -166,6 +179,7 @@ def _pci_devices():
 
 
 def _kernel_module(name):
+    """Handle kernel module."""
     base = os.path.join("/sys/module", name)
     if not os.path.isdir(base):
         return {"loaded": False, "version": None}
@@ -174,25 +188,31 @@ def _kernel_module(name):
 
 
 def _nvidia():
-    text = _run([
-        "nvidia-smi",
-        "--query-gpu=name,driver_version,pci.bus_id",
-        "--format=csv,noheader",
-    ])
+    """Handle nvidia."""
+    text = _run(
+        [
+            "nvidia-smi",
+            "--query-gpu=name,driver_version,pci.bus_id",
+            "--format=csv,noheader",
+        ],
+    )
     rows = []
     for line in text.splitlines():
         parts = [part.strip() for part in line.split(",")]
         if not parts or not parts[0]:
             continue
-        rows.append({
-            "name": parts[0],
-            "driver": parts[1] if len(parts) > 1 else "",
-            "pci": parts[2] if len(parts) > 2 else "",
-        })
+        rows.append(
+            {
+                "name": parts[0],
+                "driver": parts[1] if len(parts) > 1 else "",
+                "pci": parts[2] if len(parts) > 2 else "",
+            },
+        )
     return rows
 
 
 def _openvino_devices():
+    """Handle openvino devices."""
     version = _dist_version("openvino")
     try:
         import openvino as ov
@@ -264,6 +284,7 @@ def collect():
 
 
 def inference_interface(runtime):
+    """Inference interface."""
     if not runtime:
         return "unknown"
     if runtime.get("interface"):
@@ -294,7 +315,7 @@ def bias_action(bias):
             "Action: upgrade openvino, openvino-genai, and openvino-tokenizers "
             "to 2026.4.1 or newer, then restart wayvox-server. "
             "GenAI 2025.4 uses a static NPU pipeline that rejects those arguments. "
-            "GenAI 2026.4 accepts them. Regex replacements still correct misheard terms."
+            "GenAI 2026.4 accepts them. Regex replacements still correct misheard terms.",
         )
     if "prompt_slot" in reasons:
         if bias.get("word_timestamps"):
@@ -308,14 +329,15 @@ def bias_action(bias):
                 "word_timestamps was not compiled, so the slot stayed 4 tokens. "
                 "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart wayvox-server. "
                 "make install writes that into the user service. "
-                "The flag passes word_timestamps=True to the WhisperPipeline constructor and compiles a 447 token slot. "
+                "The flag passes word_timestamps=True to the WhisperPipeline constructor "
+                "and compiles a 447 token slot. "
                 "Do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
             )
         notes.append(
             "Failover: NPU Whisper prompt slot is 4 tokens, so a technical term list does not fit. "
             "initial_prompt and hotwords were dropped for this process. Regex replacements still run. "
-            + slot +
-            "Until then, add a replacement rule for any term the model still mishears."
+            + slot
+            + "Until then, add a replacement rule for any term the model still mishears.",
         )
     if notes:
         return " ".join(notes)
@@ -357,30 +379,31 @@ def health_hints(report):
     if has_pci_npu and not vpu.get("loaded"):
         hints.append(
             "NPU PCI device is present and kernel module intel_vpu is not loaded. "
-            "Action: load the NPU driver, then restart wayvox-server."
+            "Action: load the NPU driver, then restart wayvox-server.",
         )
     if has_pci_npu and ov.get("importable") and not has_ov_npu:
         hints.append(
             "PCI shows an NPU but OpenVINO did not list an NPU device. "
             "Action: confirm this Python's OpenVINO build includes the NPU plugin, "
-            "then restart wayvox-server."
+            "then restart wayvox-server.",
         )
     libs = report.get("libraries") or {}
     runtime = report.get("runtime") or {}
     if runtime.get("engine") == "openvino" and not libs.get("openvino-genai"):
         hints.append(
             "The server selected OpenVINO but openvino-genai is not installed in that process. "
-            "Action: install openvino, openvino-genai, and openvino-tokenizers, then restart wayvox-server."
+            "Action: install openvino, openvino-genai, and openvino-tokenizers, then restart wayvox-server.",
         )
     if runtime.get("engine") == "openvino" and not libs.get("openvino"):
         hints.append(
             "The server selected OpenVINO but the openvino package version could not be read. "
-            "Action: reinstall the OpenVINO wheel in the Wayvox environment and restart it."
+            "Action: reinstall the OpenVINO wheel in the Wayvox environment and restart it.",
         )
     return hints
 
 
 def _prop_lines(entry):
+    """Handle prop lines."""
     lines = []
     props = entry.get("properties") or {}
     name = props.get("FULL_DEVICE_NAME") or ""
@@ -392,7 +415,9 @@ def _prop_lines(entry):
     for name, info in (entry.get("plugins") or {}).items():
         desc = (info or {}).get("description") or ""
         build = (info or {}).get("build") or ""
-        detail = " ".join(part for part in (desc, f"build {build}" if build else "") if part)
+        build_part = f"build {build}" if build else ""
+        parts = [part for part in (desc, build_part) if part]
+        detail = " ".join(parts)
         lines.append(f"    plugin {name}: {detail}".rstrip())
     if entry.get("plugins_error"):
         lines.append(f"    plugin error: {entry['plugins_error']}")
@@ -412,10 +437,12 @@ def format_report(report):
     lines.append("Runtime")
     runtime = report.get("runtime") or {}
     if not runtime:
-        lines.append("  Server did not answer. Inference engine, model, and bias state are unknown.")
+        lines.append(
+            "  Server did not answer. Inference engine, model, and bias state are unknown.",
+        )
         lines.append(
             "  Action: start wayvox-server, confirm the tray host and port, then reopen About. "
-            "Library versions below are this Python, not the service."
+            "Library versions below are this Python, not the service.",
         )
     else:
         lines.append(f"  Engine: {runtime.get('engine') or 'unknown'}")
@@ -439,7 +466,10 @@ def format_report(report):
         lines.append(f"  Bias active: {active}")
         lines.append(f"  Bias rejected: {rejected}")
         lines.append(f"  Pipeline: {bias.get('pipeline', 'unknown')}")
-        if str(bias.get("device") or "").upper().startswith("NPU") or bias.get("word_timestamps") is not None:
+        device_name = str(bias.get("device") or "").upper()
+        on_npu = device_name.startswith("NPU")
+        has_timestamps = bias.get("word_timestamps") is not None
+        if on_npu or has_timestamps:
             if bias.get("word_timestamps"):
                 compile_state = "word_timestamps compiled, 447 token slot"
             elif bias.get("word_timestamps_requested"):
@@ -455,8 +485,7 @@ def format_report(report):
         vocab_info = runtime.get("vocab") or {}
         if vocab_info:
             lines.append(
-                f"  Vocabulary: {vocab_info.get('terms', '?')} terms, "
-                f"{vocab_info.get('replacements', '?')} rules"
+                f"  Vocabulary: {vocab_info.get('terms', '?')} terms, {vocab_info.get('replacements', '?')} rules",
             )
             if vocab_info.get("path"):
                 lines.append(f"  Vocabulary file: {vocab_info['path']}")
@@ -480,7 +509,7 @@ def format_report(report):
         lines.append("  No GPU or NPU PCI device found")
     for row in pci:
         lines.append(
-            f"  {row.get('kind')} {row.get('slot')}: {row.get('vendor')} {row.get('device')}".rstrip()
+            f"  {row.get('kind')} {row.get('slot')}: {row.get('vendor')} {row.get('device')}".rstrip(),
         )
     lines.append("")
     lines.append("Drivers")
@@ -491,7 +520,7 @@ def format_report(report):
             lines.append(f"  {name}: not loaded")
     for gpu in report.get("nvidia") or []:
         lines.append(
-            f"  nvidia-smi: {gpu.get('name')} driver {gpu.get('driver')} {gpu.get('pci')}".rstrip()
+            f"  nvidia-smi: {gpu.get('name')} driver {gpu.get('driver')} {gpu.get('pci')}".rstrip(),
         )
     lines.append("")
     lines.append("Libraries")

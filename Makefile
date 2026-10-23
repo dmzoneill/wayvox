@@ -318,8 +318,8 @@ enable: ## Enable Wayvox services (server, dictation; optionally C++ fallback)
 	systemctl --user enable wayvox-server.service
 	systemctl --user enable wayvox-push-to-talk.service
 	@printf 'Enable wayvox-cpp-server (port $(WHISPER_CPP_PORT), GGML encoder-only fallback)? [y/N] '; \
-	read ans; \
-	case "$$ans" in \
+	read answer; \
+	case "$$answer" in \
 		[Yy]*) systemctl --user enable wayvox-cpp-server.service; echo "wayvox-cpp-server enabled" ;; \
 		*)     systemctl --user disable wayvox-cpp-server.service 2>/dev/null; echo "wayvox-cpp-server skipped" ;; \
 	esac

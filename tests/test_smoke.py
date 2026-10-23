@@ -9,10 +9,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # server-native.py smoke tests
 # ---------------------------------------------------------------------------
+
 
 class TestServerSmoke:
     """Verify the Flask app assembles and its routes respond."""
@@ -28,10 +28,18 @@ class TestServerSmoke:
         sys.modules["openvino_genai"] = mock_ov
         sys.modules["librosa"] = mock_librosa
 
-        with patch("os.path.exists", return_value=True), \
-             patch("os.listdir", return_value=["whisper-small-en"]), \
-             patch("os.path.isdir", return_value=True), \
-             patch("os.path.expanduser", side_effect=lambda p: p.replace("~", "/tmp/smoke")):
+        with (
+            patch("os.path.exists", return_value=True),
+            patch(
+                "os.listdir",
+                return_value=["whisper-small-en"],
+            ),
+            patch("os.path.isdir", return_value=True),
+            patch(
+                "os.path.expanduser",
+                side_effect=lambda p: p.replace("~", "/tmp/smoke"),
+            ),
+        ):
             self.mod = importlib.import_module("server-native")
             importlib.reload(self.mod)
 
@@ -46,6 +54,7 @@ class TestServerSmoke:
 
     def test_app_is_flask(self):
         from flask import Flask
+
         assert isinstance(self.mod.app, Flask)
 
     def test_health_returns_200(self):
@@ -56,8 +65,13 @@ class TestServerSmoke:
         assert "model" in data
 
     def test_models_returns_200(self):
-        with patch("os.listdir", return_value=["whisper-small-en"]), \
-             patch("os.path.isdir", return_value=True):
+        with (
+            patch("os.listdir", return_value=["whisper-small-en"]),
+            patch(
+                "os.path.isdir",
+                return_value=True,
+            ),
+        ):
             resp = self.client.get("/models")
         assert resp.status_code == 200
         data = json.loads(resp.data)
@@ -93,12 +107,23 @@ class TestServerSmoke:
     def test_all_expected_routes_registered(self):
         rules = [r.rule for r in self.mod.app.url_map.iter_rules()]
         expected = [
-            "/health", "/system", "/models", "/model/default",
-            "/transcribe", "/transcribe/<model_name>",
-            "/transcribe/stream", "/transcribe/stream/<model_name>",
-            "/rewrite", "/llm/models", "/llm/model", "/llm/tones",
-            "/metrics", "/punctuate", "/translate",
-            "/transcribe/timestamps", "/transcribe/timestamps/<model_name>",
+            "/health",
+            "/system",
+            "/models",
+            "/model/default",
+            "/transcribe",
+            "/transcribe/<model_name>",
+            "/transcribe/stream",
+            "/transcribe/stream/<model_name>",
+            "/rewrite",
+            "/llm/models",
+            "/llm/model",
+            "/llm/tones",
+            "/metrics",
+            "/punctuate",
+            "/translate",
+            "/transcribe/timestamps",
+            "/transcribe/timestamps/<model_name>",
             "/history/export",
         ]
         for route in expected:
@@ -109,27 +134,34 @@ class TestServerSmoke:
         assert resp.status_code == 400
 
     def test_rewrite_rejects_missing_text(self):
-        resp = self.client.post("/rewrite",
-                                data=json.dumps({}),
-                                content_type="application/json")
+        resp = self.client.post(
+            "/rewrite",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
         assert resp.status_code == 400
 
     def test_punctuate_rejects_empty_text(self):
-        resp = self.client.post("/punctuate",
-                                data=json.dumps({"text": "  "}),
-                                content_type="application/json")
+        resp = self.client.post(
+            "/punctuate",
+            data=json.dumps({"text": "  "}),
+            content_type="application/json",
+        )
         assert resp.status_code == 400
 
     def test_translate_requires_target_language(self):
-        resp = self.client.post("/translate",
-                                data=json.dumps({"text": "hello"}),
-                                content_type="application/json")
+        resp = self.client.post(
+            "/translate",
+            data=json.dumps({"text": "hello"}),
+            content_type="application/json",
+        )
         assert resp.status_code == 400
 
 
 # ---------------------------------------------------------------------------
 # push-to-talk.py smoke tests
 # ---------------------------------------------------------------------------
+
 
 class TestPushToTalkSmoke:
     """Verify the push-to-talk module imports and key components work."""
@@ -139,7 +171,7 @@ class TestPushToTalkSmoke:
         spec = importlib.util.spec_from_file_location(
             "push_to_talk",
             os.path.join(os.path.dirname(os.path.dirname(__file__)), "push-to-talk.py"),
-            submodule_search_locations=[]
+            submodule_search_locations=[],
         )
         self.mod = importlib.util.module_from_spec(spec)
         sys.modules["push_to_talk"] = self.mod
@@ -204,13 +236,16 @@ class TestPushToTalkSmoke:
         for cmd, actions in self.mod.VOICE_COMMANDS.items():
             assert len(actions) > 0, f"Command '{cmd}' has no actions"
             for action_type, _ in actions:
-                assert action_type in ("key", "type"), \
-                    f"Command '{cmd}' has invalid action type '{action_type}'"
+                assert action_type in (
+                    "key",
+                    "type",
+                ), f"Command '{cmd}' has invalid action type '{action_type}'"
 
 
 # ---------------------------------------------------------------------------
 # KDE service smoke tests
 # ---------------------------------------------------------------------------
+
 
 class TestKdeServiceSmoke:
     """Verify the KDE D-Bus service module loads and key functions work."""
@@ -228,9 +263,12 @@ class TestKdeServiceSmoke:
 
         spec = importlib.util.spec_from_file_location(
             "wayvox_npu_kde_service",
-            os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                          "kde-plasmoid", "wayvox-kde-service.py"),
-            submodule_search_locations=[]
+            os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "kde-plasmoid",
+                "wayvox-kde-service.py",
+            ),
+            submodule_search_locations=[],
         )
         self.mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.mod)
@@ -248,7 +286,10 @@ class TestKdeServiceSmoke:
         assert isinstance(result, dict)
 
     def test_server_url_default(self):
-        url = self.mod.server_url("/health", {"server-host": "localhost", "server-port": 8080})
+        url = self.mod.server_url(
+            "/health",
+            {"server-host": "localhost", "server-port": 8080},
+        )
         assert url == "http://localhost:8080/health"
 
     def test_server_url_default_config(self):

@@ -5,14 +5,18 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-CONFIG_DIR = Path(os.path.expanduser(os.environ.get("WAYVOX_CONFIG_DIR", "~/.config/wayvox")))
+CONFIG_DIR = Path(
+    os.path.expanduser(os.environ.get("WAYVOX_CONFIG_DIR", "~/.config/wayvox")),
+)
 LEGACY_CONFIG_DIR = Path(os.path.expanduser("~/.config/whisper-npu"))
 CACHE_DIR = Path(os.path.expanduser("~/.cache/wayvox"))
 LEGACY_CACHE_DIR = Path(os.path.expanduser("~/.cache/whisper-npu"))
 
 
 def current_config_dir() -> Path:
-    return Path(os.path.expanduser(os.environ.get("WAYVOX_CONFIG_DIR", "~/.config/wayvox")))
+    return Path(
+        os.path.expanduser(os.environ.get("WAYVOX_CONFIG_DIR", "~/.config/wayvox")),
+    )
 
 
 def legacy_config_dir() -> Path:

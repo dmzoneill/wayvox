@@ -10,17 +10,17 @@ Usage:
 
 import argparse
 import ctypes
+import ctypes.util
 import io
 import logging
 import os
 import threading as _threading
 import time
 
-import librosa
-from flask import Flask, request, jsonify
-
 import diagnostics
+import librosa
 import vocab
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -30,11 +30,23 @@ logger = logging.getLogger(__name__)
 # ctypes bindings for libwhisper.so
 # ---------------------------------------------------------------------------
 
-import ctypes.util as _ctutil
-_whisper_lib_path = (
-    _ctutil.find_library("whisper") or
-    next((p for p in ["/usr/local/lib64/libwhisper.so", "/usr/local/lib/libwhisper.so"] if os.path.exists(p)), None)
-)
+
+def _find_whisper_library():
+    """Return the libwhisper path from the loader or the usual install prefixes."""
+    loaded = ctypes.util.find_library("whisper")
+    if loaded:
+        return loaded
+    search_paths = (
+        "/usr/local/lib64/libwhisper.so",
+        "/usr/local/lib/libwhisper.so",
+    )
+    for candidate in search_paths:
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+_whisper_lib_path = _find_whisper_library()
 if _whisper_lib_path is None:
     raise OSError("libwhisper.so not found — run: make install-whisper-cpp")
 _lib = ctypes.CDLL(_whisper_lib_path)
@@ -47,17 +59,23 @@ try:
     logger.info("whisper.cpp version: %s", _WHISPER_VERSION)
 except AttributeError:
     _WHISPER_VERSION = "unknown"
-    logger.warning("whisper_version() not exported — version unknown; struct layout unverifiable")
+    logger.warning(
+        "whisper_version() not exported — version unknown; struct layout unverifiable",
+    )
 
 WHISPER_SAMPLING_GREEDY = 0
 WHISPER_SAMPLING_BEAM_SEARCH = 1
 
 
 class WhisperAhead(ctypes.Structure):
+    """WhisperAhead."""
+
     _fields_ = [("n_text_layer", ctypes.c_int), ("n_head", ctypes.c_int)]
 
 
 class WhisperAheads(ctypes.Structure):
+    """WhisperAheads."""
+
     _fields_ = [
         ("n_heads", ctypes.c_size_t),
         ("heads", ctypes.POINTER(WhisperAhead)),
@@ -65,6 +83,8 @@ class WhisperAheads(ctypes.Structure):
 
 
 class WhisperContextParams(ctypes.Structure):
+    """WhisperContextParams."""
+
     _fields_ = [
         ("use_gpu", ctypes.c_bool),
         ("flash_attn", ctypes.c_bool),
@@ -77,8 +97,9 @@ class WhisperContextParams(ctypes.Structure):
     ]
 
 
-
 class WhisperFullParams(ctypes.Structure):
+    """WhisperFullParams."""
+
     _fields_ = [
         ("strategy", ctypes.c_int),
         ("n_threads", ctypes.c_int),
@@ -142,11 +163,17 @@ _lib.whisper_context_default_params.restype = WhisperContextParams
 _lib.whisper_context_default_params.argtypes = []
 
 _lib.whisper_init_from_file_with_params.restype = ctypes.c_void_p
-_lib.whisper_init_from_file_with_params.argtypes = [ctypes.c_char_p, WhisperContextParams]
+_lib.whisper_init_from_file_with_params.argtypes = [
+    ctypes.c_char_p,
+    WhisperContextParams,
+]
 
 _lib.whisper_ctx_init_openvino_encoder.restype = ctypes.c_int
 _lib.whisper_ctx_init_openvino_encoder.argtypes = [
-    ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p
+    ctypes.c_void_p,
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+    ctypes.c_char_p,
 ]
 
 _lib.whisper_full_default_params.restype = WhisperFullParams
@@ -154,8 +181,10 @@ _lib.whisper_full_default_params.argtypes = [ctypes.c_int]
 
 _lib.whisper_full.restype = ctypes.c_int
 _lib.whisper_full.argtypes = [
-    ctypes.c_void_p, WhisperFullParams,
-    ctypes.POINTER(ctypes.c_float), ctypes.c_int,
+    ctypes.c_void_p,
+    WhisperFullParams,
+    ctypes.POINTER(ctypes.c_float),
+    ctypes.c_int,
 ]
 
 _lib.whisper_full_n_segments.restype = ctypes.c_int
@@ -178,30 +207,46 @@ def _verify_struct_layout():
     d = _lib.whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
     checks = [
         ("no_speech_thold", d.no_speech_thold, 0.6, 0.05),
-        ("entropy_thold",   d.entropy_thold,   2.4, 0.1),
-        ("temperature",     d.temperature,     0.0, 0.01),
+        ("entropy_thold", d.entropy_thold, 2.4, 0.1),
+        ("temperature", d.temperature, 0.0, 0.01),
     ]
     bad = [(name, got, exp) for name, got, exp, tol in checks if abs(got - exp) > tol]
     if bad:
         for name, got, exp in bad:
             logger.error(
                 "WhisperFullParams struct mismatch: %s expected ~%.3f got %.3f",
-                name, exp, got,
+                name,
+                exp,
+                got,
             )
         raise RuntimeError(
             "WhisperFullParams layout does not match libwhisper.so "
             f"(version={_WHISPER_VERSION}). "
-            "Update the ctypes struct in server-whisper-cpp.py to match your whisper.cpp build."
+            "Update the ctypes struct in server-whisper-cpp.py to match your whisper.cpp build.",
         )
-    logger.info("WhisperFullParams struct layout verified (version=%s)", _WHISPER_VERSION)
+    logger.info(
+        "WhisperFullParams struct layout verified (version=%s)",
+        _WHISPER_VERSION,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Model management
 # ---------------------------------------------------------------------------
 
+
 class WhisperCppModel:
-    def __init__(self, model_path, device="NPU", n_threads=None, language="en", no_speech_thold=0.6):
+    """WhisperCppModel."""
+
+    def __init__(
+        self,
+        model_path,
+        device="NPU",
+        n_threads=None,
+        language="en",
+        no_speech_thold=0.6,
+    ):
+        """Handle init  ."""
         self.ctx = None
         self.model_path = model_path
         self.device = device
@@ -211,12 +256,14 @@ class WhisperCppModel:
         self._load()
 
     def _load(self):
+        """Handle load."""
         logger.info("Loading model: %s", self.model_path)
         t0 = time.time()
 
         cparams = _lib.whisper_context_default_params()
         self.ctx = _lib.whisper_init_from_file_with_params(
-            self.model_path.encode(), cparams
+            self.model_path.encode(),
+            cparams,
         )
         if not self.ctx:
             raise RuntimeError(f"Failed to load model: {self.model_path}")
@@ -232,7 +279,10 @@ class WhisperCppModel:
                 ov_cache.encode(),
             )
             if ret != 0:
-                logger.warning("OpenVINO encoder init failed (code %d), using CPU fallback", ret)
+                logger.warning(
+                    "OpenVINO encoder init failed (code %d), using CPU fallback",
+                    ret,
+                )
         else:
             logger.info("No OpenVINO encoder model found, using CPU")
 
@@ -246,6 +296,7 @@ class WhisperCppModel:
         t.start()
 
     def _keepalive(self, interval=60):
+        """Handle keepalive."""
         silence = (ctypes.c_float * 16000)()
         while True:
             time.sleep(interval)
@@ -253,6 +304,7 @@ class WhisperCppModel:
                 self.transcribe(silence, no_speech_thold=1.0)
 
     def transcribe(self, audio_f32, no_speech_thold=None):
+        """Transcribe."""
         params = _lib.whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
         params.print_realtime = False
         params.print_progress = False
@@ -262,7 +314,10 @@ class WhisperCppModel:
         params.single_segment = False
         params.n_threads = self.n_threads
         params.language = self.language
-        params.no_speech_thold = self.no_speech_thold if no_speech_thold is None else no_speech_thold
+        if no_speech_thold is None:
+            params.no_speech_thold = self.no_speech_thold
+        else:
+            params.no_speech_thold = no_speech_thold
         # Keep the buffer alive until whisper_full returns. Warmup passes an
         # explicit threshold and skips the prompt so silence is not biased.
         prompt_buf = None
@@ -294,11 +349,14 @@ class WhisperCppModel:
         duration = len(audio_f32) / 16000
         logger.info(
             "Transcribed %.1fs audio in %.2fs (%.1fx realtime)",
-            duration, elapsed, duration / elapsed if elapsed > 0 else 0,
+            duration,
+            elapsed,
+            duration / elapsed if elapsed > 0 else 0,
         )
         return full_text
 
     def __del__(self):
+        """Handle del  ."""
         if self.ctx:
             _lib.whisper_free(self.ctx)
 
@@ -315,8 +373,10 @@ MAX_AUDIO_SECONDS = 30
 # Flask routes
 # ---------------------------------------------------------------------------
 
+
 @app.route("/transcribe", methods=["POST"])
 def transcribe():
+    """Transcribe."""
     audio_data = request.get_data()
     if not audio_data:
         return jsonify({"error": "No audio data"}), 400
@@ -332,6 +392,7 @@ def transcribe():
 
 @app.route("/transcribe/stream", methods=["POST"])
 def transcribe_stream():
+    """Transcribe stream."""
     audio_data = request.get_data()
     if not audio_data:
         return jsonify({"error": "No audio data"}), 400
@@ -350,11 +411,22 @@ def transcribe_stream():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "backend": "whisper.cpp", "model": model.model_path})
+    """Health."""
+    return jsonify(
+        {"status": "ok", "backend": "whisper.cpp", "model": model.model_path},
+    )
+
+
+def _whisper_cpp_interface(model):
+    """Describe the whisper.cpp runtime talking to the encoder device."""
+    device_name = str(getattr(model, "device", "NPU"))
+    prefix = "whisper.cpp libwhisper.so, OpenVINO encoder on "
+    return prefix + device_name
 
 
 @app.route("/system", methods=["GET"])
 def system_info():
+    """System info."""
     report = diagnostics.collect()
     report["source"] = "wayvox-cpp-server"
     report["libraries"]["whisper.cpp"] = _WHISPER_VERSION
@@ -362,10 +434,7 @@ def system_info():
         "engine": "whisper.cpp",
         "device": getattr(model, "device", "NPU"),
         "model": getattr(model, "model_path", ""),
-        "interface": (
-            "whisper.cpp libwhisper.so, OpenVINO encoder on "
-            + str(getattr(model, "device", "NPU"))
-        ),
+        "interface": _whisper_cpp_interface(model),
         "whisper_cpp": _WHISPER_VERSION,
         "pid": os.getpid(),
         "bias": vocab.bias_status(),
@@ -377,11 +446,13 @@ def system_info():
 
 @app.route("/models", methods=["GET"])
 def list_models():
+    """List models."""
     return jsonify({"models": [model.model_path]})
 
 
 @app.route("/model/default", methods=["GET"])
 def get_default_model():
+    """Get default model."""
     return jsonify({"model": model.model_path})
 
 
@@ -392,12 +463,31 @@ def get_default_model():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Whisper.cpp streaming server")
     parser.add_argument("--port", type=int, default=5001)
-    parser.add_argument("--model", default=os.path.expanduser("~/.cache/whisper/ggml-base.bin"))
-    parser.add_argument("--device", default="NPU", help="OpenVINO device (NPU, CPU, GPU)")
-    parser.add_argument("--threads", type=int, default=None, help="Inference threads (default: cpu_count/2)")
-    parser.add_argument("--language", default="en", help="Whisper language code (default: en)")
     parser.add_argument(
-        "--no-speech-thold", type=float, default=0.6, dest="no_speech_thold",
+        "--model",
+        default=os.path.expanduser("~/.cache/whisper/ggml-base.bin"),
+    )
+    parser.add_argument(
+        "--device",
+        default="NPU",
+        help="OpenVINO device (NPU, CPU, GPU)",
+    )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=None,
+        help="Inference threads (default: cpu_count/2)",
+    )
+    parser.add_argument(
+        "--language",
+        default="en",
+        help="Whisper language code (default: en)",
+    )
+    parser.add_argument(
+        "--no-speech-thold",
+        type=float,
+        default=0.6,
+        dest="no_speech_thold",
         help="no_speech probability threshold 0.0-1.0 (default: 0.6; set 1.0 to disable for PTT)",
     )
     args = parser.parse_args()
