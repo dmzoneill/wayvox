@@ -4,15 +4,15 @@ Primary server listens on `http://127.0.0.1:5000`. The optional whisper.cpp serv
 
 ## Primary server
 
-| Endpoint | Method | Purpose |
-| --- | --- | --- |
-| `/health` | GET | Runtime, model, device, and vocabulary status |
-| `/system` | GET | Version, hardware, libraries, and runtime details |
-| `/models` | GET | List installed OpenVINO models |
-| `/transcribe` | POST | Batch transcription with the default model |
-| `/transcribe/<model>` | POST | Batch transcription with a named model |
-| `/transcribe/stream` | POST | Streaming transcription with the default model |
-| `/transcribe/stream/<model>` | POST | Streaming transcription with a named model |
+| Endpoint                     | Method | Purpose                                           |
+| ---------------------------- | ------ | ------------------------------------------------- |
+| `/health`                    | GET    | Runtime, model, device, and vocabulary status     |
+| `/system`                    | GET    | Version, hardware, libraries, and runtime details |
+| `/models`                    | GET    | List installed OpenVINO models                    |
+| `/transcribe`                | POST   | Batch transcription with the default model        |
+| `/transcribe/<model>`        | POST   | Batch transcription with a named model            |
+| `/transcribe/stream`         | POST   | Streaming transcription with the default model    |
+| `/transcribe/stream/<model>` | POST   | Streaming transcription with a named model        |
 
 ## Batch transcription
 
@@ -22,7 +22,7 @@ curl -X POST http://127.0.0.1:5000/transcribe \
 ```
 
 ```json
-{"text": "The transcribed text appears here."}
+{ "text": "The transcribed text appears here." }
 ```
 
 ## Streaming transcription
@@ -60,16 +60,16 @@ curl http://127.0.0.1:5000/system
 
 The optional `wayvox-cpp-server.service` exposes:
 
-| Endpoint | Method | Purpose |
-| --- | --- | --- |
-| `/health` | GET | Health check |
-| `/transcribe` | POST | Batch transcription |
-| `/transcribe/stream` | POST | Transcribe the latest audio window |
+| Endpoint             | Method | Purpose                            |
+| -------------------- | ------ | ---------------------------------- |
+| `/health`            | GET    | Health check                       |
+| `/transcribe`        | POST   | Batch transcription                |
+| `/transcribe/stream` | POST   | Transcribe the latest audio window |
 
 Run it manually when needed:
 
 ```bash
-python3 server-whisper-cpp.py \
+python3 server_whisper_cpp.py \
   --port 5001 \
   --model ~/.cache/whisper/ggml-base.bin \
   --device NPU

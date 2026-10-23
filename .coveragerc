@@ -2,7 +2,7 @@
 source = .
 omit =
     tests/*
-    server-whisper-cpp.py
+    server_whisper_cpp.py
     gnome-extension/*
     kde-plasmoid/contents/*
 

@@ -2,9 +2,9 @@
 
 ## Project layout
 
-- `server-native.py`: primary OpenVINO server.
-- `server-whisper-cpp.py`: optional whisper.cpp server.
-- `push-to-talk.py`: desktop dictation client.
+- `server_native.py`: primary OpenVINO server.
+- `server_whisper_cpp.py`: optional whisper.cpp server.
+- `push_to_talk.py`: desktop dictation client.
 - `gnome-extension/`: GNOME Shell extension.
 - `kde-plasmoid/`: KDE Plasma widget and D-Bus overlay.
 - `branding/`: product mark, social preview, and brand guidance.
@@ -23,7 +23,7 @@ Useful focused runs:
 
 ```bash
 pytest -q tests/test_diagnostics.py tests/test_vocab.py
-pytest -q tests/test_push_to_talk.py
+pytest -q tests/test_push_to_talk_audio.py tests/test_push_to_talk_output.py
 ```
 
 The live service path can be checked without importing server dependencies into the system Python:

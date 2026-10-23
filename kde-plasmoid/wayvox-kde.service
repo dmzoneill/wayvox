@@ -5,7 +5,7 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 @WAYVOX_PROJECT_DIR@/kde-plasmoid/wayvox-kde-service.py
+ExecStart=/usr/bin/python3 @WAYVOX_PROJECT_DIR@/kde-plasmoid/wayvox_kde_service.py
 Restart=on-failure
 RestartSec=3
 Environment=DISPLAY=:0

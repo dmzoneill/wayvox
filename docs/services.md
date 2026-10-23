@@ -4,12 +4,12 @@ Wayvox uses systemd user services. The primary workflow needs `wayvox-server.ser
 
 ## Service names
 
-| Service | Role | Default |
-| --- | --- | --- |
-| `wayvox-server.service` | OpenVINO Whisper server on port 5000 | Enabled |
-| `wayvox-push-to-talk.service` | Keyboard dictation client | Enabled |
-| `wayvox-cpp-server.service` | whisper.cpp fallback on port 5001 | Disabled |
-| `wayvox-kde.service` | KDE Language Buddy D-Bus service | Optional |
+| Service                       | Role                                 | Default  |
+| ----------------------------- | ------------------------------------ | -------- |
+| `wayvox-server.service`       | OpenVINO Whisper server on port 5000 | Enabled  |
+| `wayvox-push-to-talk.service` | Keyboard dictation client            | Enabled  |
+| `wayvox-cpp-server.service`   | whisper.cpp fallback on port 5001    | Disabled |
+| `wayvox-kde.service`          | KDE Language Buddy D-Bus service     | Optional |
 
 ## Install
 

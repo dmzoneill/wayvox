@@ -547,8 +547,8 @@ PlasmaExtras.Representation {
                     icon.name: "accessories-dictionary"
                     onClicked: {
                         var home = root.homeDir
-                        var cmd = "python3 \"" + home + "/src/usr/wayvox/vocab-editor.py\""
-                        cmd += " || python3 \"" + home + "/src/usr/whisper-npu-server/vocab-editor.py\""
+                        var cmd = "python3 \"" + home + "/src/usr/wayvox/vocab_editor.py\""
+                        cmd += " || python3 \"" + home + "/src/usr/whisper-npu-server/vocab_editor.py\""
                         root.executable.exec(cmd)
                     }
                 }

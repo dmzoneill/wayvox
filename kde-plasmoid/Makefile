@@ -93,12 +93,12 @@ preview-dbus: deps
 	@echo '    /com/whisper/LanguageBuddy com.whisper.LanguageBuddy.HandleTranscription \'
 	@echo '    string:"Hello this is a test transcription"'
 	@echo ""
-	python3 $(CWD)/wayvox-kde-service.py
+	python3 $(CWD)/wayvox_kde_service.py
 
 preview-stop:
 	-pkill -f "plasmawindowed $(PLUGIN_ID)" 2>/dev/null
 	-pkill -f "plasmoidviewer.*$(PLUGIN_ID)" 2>/dev/null
-	-pkill -f "wayvox-kde-service" 2>/dev/null
+	-pkill -f "wayvox_kde_service" 2>/dev/null
 	@echo "Preview processes stopped."
 
 # ------------------------------------------------------------------

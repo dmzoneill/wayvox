@@ -2,6 +2,7 @@
 
 import io
 import json
+import math
 import os
 import struct
 import sys
@@ -16,6 +17,9 @@ import pytest
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _TESTS_DIR not in sys.path:
+    sys.path.insert(0, _TESTS_DIR)
 
 # Keep server tests off the user's real vocabulary file.
 os.environ.setdefault(
@@ -28,18 +32,33 @@ os.environ.setdefault(
 # Audio helpers
 # ---------------------------------------------------------------------------
 
-def make_wav_bytes(samples=None, duration_s=1.0, sample_rate=16000, channels=1, sample_width=2):
+
+def _sine_samples(count, amplitude, sample_rate):
+    """Return a 440 Hz sine wave as 16-bit sample values."""
+    samples = []
+    for index in range(count):
+        phase = 2 * math.pi * 440 * index / sample_rate
+        samples.append(int(amplitude * math.sin(phase)))
+    return samples
+
+
+def make_wav_bytes(
+    samples=None,
+    duration_s=1.0,
+    sample_rate=16000,
+    channels=1,
+    sample_width=2,
+):
     """Generate a valid WAV file in memory.
 
     If *samples* is None, generates a sine wave of *duration_s* seconds.
     """
-    import math
     if samples is None:
         n = int(sample_rate * duration_s)
-        samples = [int(16000 * math.sin(2 * math.pi * 440 * i / sample_rate)) for i in range(n)]
+        samples = _sine_samples(n, 16000, sample_rate)
 
     buf = io.BytesIO()
-    with wave.open(buf, "wb") as wf:
+    with wave.Wave_write(buf) as wf:
         wf.setnchannels(channels)
         wf.setsampwidth(sample_width)
         wf.setframerate(sample_rate)
@@ -50,10 +69,9 @@ def make_wav_bytes(samples=None, duration_s=1.0, sample_rate=16000, channels=1, 
 
 def make_raw_audio(samples=None, duration_s=1.0, sample_rate=16000):
     """Generate raw 16-bit LE PCM bytes (no WAV header)."""
-    import math
     if samples is None:
         n = int(sample_rate * duration_s)
-        samples = [int(16000 * math.sin(2 * math.pi * 440 * i / sample_rate)) for i in range(n)]
+        samples = _sine_samples(n, 16000, sample_rate)
     return struct.pack(f"<{len(samples)}h", *samples)
 
 
@@ -65,22 +83,26 @@ def make_silent_raw(duration_s=1.0, sample_rate=16000):
 
 @pytest.fixture
 def wav_bytes():
+    """Return a one-second in-memory WAV fixture."""
     return make_wav_bytes(duration_s=1.0)
 
 
 @pytest.fixture
 def raw_audio():
+    """Return one second of raw 16-bit audio."""
     return make_raw_audio(duration_s=1.0)
 
 
 @pytest.fixture
 def silent_raw():
+    """Return one second of silent raw PCM."""
     return make_silent_raw(duration_s=1.0)
 
 
 # ---------------------------------------------------------------------------
 # Temporary config
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def tmp_config(tmp_path):
@@ -120,6 +142,7 @@ def tmp_llm_models_dir(tmp_path):
 # ---------------------------------------------------------------------------
 # Mock helpers
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_subprocess():

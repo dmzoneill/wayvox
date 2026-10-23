@@ -61,7 +61,7 @@ jobs:
       - name: Find and check shell scripts
         run: |
           shopt -s globstar nullglob
-          scripts=($(find . -name '*.sh' -not -path './.git/*'))
+          mapfile -t scripts < <(find . -name '*.sh' -not -path './.git/*')
           if [ ${#scripts[@]} -eq 0 ]; then
             echo "No shell scripts found, skipping"
             exit 0

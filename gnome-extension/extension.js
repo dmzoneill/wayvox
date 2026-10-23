@@ -1,14 +1,16 @@
-import GLib from 'gi://GLib'
-import Gio from 'gi://Gio'
-import GObject from 'gi://GObject'
-import St from 'gi://St'
-import Clutter from 'gi://Clutter'
-import Shell from 'gi://Shell'
+import GLib from "gi://GLib";
+import Gio from "gi://Gio";
+import GObject from "gi://GObject";
+import St from "gi://St";
+import Shell from "gi://Shell";
 
-import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js'
-import * as Main from 'resource:///org/gnome/shell/ui/main.js'
-import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js'
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js'
+import {
+  Extension,
+  gettext as _,
+} from "resource:///org/gnome/shell/extensions/extension.js";
+import * as Main from "resource:///org/gnome/shell/ui/main.js";
+import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
+import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import {
   WhisperClient,
@@ -25,53 +27,53 @@ import {
   typeText,
   backspaceN,
   saveToFile,
-  logDebug
-} from './utils.js'
+  logDebug,
+} from "./utils.js";
 
-const DEVICES = ['auto', 'NPU', 'GPU', 'CUDA', 'CPU']
-const BACKENDS = ['openvino', 'whisper-cpp']
+const DEVICES = ["auto", "NPU", "GPU", "CUDA", "CPU"];
+const BACKENDS = ["openvino", "whisper-cpp"];
 const HOTKEYS = [
-  'KEY_RIGHTCTRL',
-  'KEY_LEFTCTRL',
-  'KEY_RIGHTALT',
-  'KEY_LEFTALT',
-  'KEY_RIGHTSHIFT',
-  'KEY_LEFTSHIFT',
-  'KEY_SCROLLLOCK',
-  'KEY_PAUSE',
-  'KEY_F23',
-  'KEY_VOICECOMMAND',
-  'KEY_ASSISTANT'
-]
-const DEFAULT_TONES = ['diplomatic', 'professional']
+  "KEY_RIGHTCTRL",
+  "KEY_LEFTCTRL",
+  "KEY_RIGHTALT",
+  "KEY_LEFTALT",
+  "KEY_RIGHTSHIFT",
+  "KEY_LEFTSHIFT",
+  "KEY_SCROLLLOCK",
+  "KEY_PAUSE",
+  "KEY_F23",
+  "KEY_VOICECOMMAND",
+  "KEY_ASSISTANT",
+];
+const DEFAULT_TONES = ["diplomatic", "professional"];
 const LANGUAGES = [
-  ['Auto', ''],
-  ['English', 'en'],
-  ['German', 'de'],
-  ['French', 'fr'],
-  ['Spanish', 'es'],
-  ['Italian', 'it'],
-  ['Portuguese', 'pt'],
-  ['Dutch', 'nl'],
-  ['Polish', 'pl'],
-  ['Japanese', 'ja'],
-  ['Chinese', 'zh'],
-  ['Korean', 'ko']
-]
+  ["Auto", ""],
+  ["English", "en"],
+  ["German", "de"],
+  ["French", "fr"],
+  ["Spanish", "es"],
+  ["Italian", "it"],
+  ["Portuguese", "pt"],
+  ["Dutch", "nl"],
+  ["Polish", "pl"],
+  ["Japanese", "ja"],
+  ["Chinese", "zh"],
+  ["Korean", "ko"],
+];
 const TRANSLATE_TARGETS = [
-  ['Disabled', ''],
-  ['English', 'English'],
-  ['German', 'German'],
-  ['French', 'French'],
-  ['Spanish', 'Spanish'],
-  ['Italian', 'Italian'],
-  ['Portuguese', 'Portuguese'],
-  ['Dutch', 'Dutch'],
-  ['Polish', 'Polish'],
-  ['Japanese', 'Japanese'],
-  ['Chinese', 'Chinese'],
-  ['Korean', 'Korean']
-]
+  ["Disabled", ""],
+  ["English", "English"],
+  ["German", "German"],
+  ["French", "French"],
+  ["Spanish", "Spanish"],
+  ["Italian", "Italian"],
+  ["Portuguese", "Portuguese"],
+  ["Dutch", "Dutch"],
+  ["Polish", "Polish"],
+  ["Japanese", "Japanese"],
+  ["Chinese", "Chinese"],
+  ["Korean", "Korean"],
+];
 
 const DBUS_IFACE = `
 <node>
@@ -94,9 +96,9 @@ const DBUS_IFACE = `
       <arg type="b" direction="out" name="shown"/>
     </method>
   </interface>
-</node>`
+</node>`;
 
-const OVERLAY_PADDING = 100
+const OVERLAY_PADDING = 100;
 
 // ---------------------------------------------------------------------------
 // Language Buddy overlay — floating card list at bottom-right
@@ -104,155 +106,159 @@ const OVERLAY_PADDING = 100
 
 const LanguageBuddyOverlay = GObject.registerClass(
   class LanguageBuddyOverlay extends St.BoxLayout {
-    _init () {
+    _init() {
       super._init({
         vertical: true,
-        style_class: 'wayvox-overlay',
+        style_class: "wayvox-overlay",
         reactive: true,
-        visible: false
-      })
+        visible: false,
+      });
 
-      this._timeoutId = null
+      this._timeoutId = null;
     }
 
-    show (tones, originalText, onSelect, timeoutSec) {
-      this.destroy_all_children()
-      this._cards = {}
-      this._onSelect = onSelect
+    show(tones, originalText, onSelect, timeoutSec) {
+      this.destroy_all_children();
+      this._cards = {};
+      this._onSelect = onSelect;
 
-      const headerBox = new St.BoxLayout({ x_expand: true })
+      const headerBox = new St.BoxLayout({ x_expand: true });
       const headerLabel = new St.Label({
-        text: _('Language Buddy'),
-        style_class: 'wayvox-overlay-header',
-        x_expand: true
-      })
+        text: _("Language Buddy"),
+        style_class: "wayvox-overlay-header",
+        x_expand: true,
+      });
       const dismissBtn = new St.Button({
-        style_class: 'wayvox-overlay-dismiss',
-        child: new St.Label({ text: '✕' })
-      })
-      dismissBtn.connect('clicked', () => this._dismiss())
-      headerBox.add_child(headerLabel)
-      headerBox.add_child(dismissBtn)
-      this.add_child(headerBox)
+        style_class: "wayvox-overlay-dismiss",
+        child: new St.Label({ text: "✕" }),
+      });
+      dismissBtn.connect("clicked", () => this._dismiss());
+      headerBox.add_child(headerLabel);
+      headerBox.add_child(dismissBtn);
+      this.add_child(headerBox);
 
-      this._addCard('original', originalText, true)
+      this._addCard("original", originalText, true);
       for (const tone of tones) {
-        this._addCard(tone, _('Processing...'), false)
+        this._addCard(tone, _("Processing..."), false);
       }
 
-      this._showAndPosition()
+      this._showAndPosition();
 
       if (timeoutSec > 0) {
-        this._timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, timeoutSec, () => {
-          this._dismiss()
-          return GLib.SOURCE_REMOVE
-        })
+        this._timeoutId = GLib.timeout_add_seconds(
+          GLib.PRIORITY_DEFAULT,
+          timeoutSec,
+          () => {
+            this._dismiss();
+            return GLib.SOURCE_REMOVE;
+          },
+        );
       }
     }
 
-    _addCard (tone, text, ready) {
+    _addCard(tone, text, ready) {
       const card = new St.Button({
-        style_class: 'wayvox-overlay-card',
+        style_class: "wayvox-overlay-card",
         x_expand: true,
         reactive: ready,
         can_focus: false,
-        track_hover: true
-      })
+        track_hover: true,
+      });
 
-      const cardBox = new St.BoxLayout({ vertical: true })
+      const cardBox = new St.BoxLayout({ vertical: true });
 
       const toneLabel = new St.Label({
         text: tone.charAt(0).toUpperCase() + tone.slice(1),
-        style_class: 'wayvox-overlay-tone'
-      })
-      cardBox.add_child(toneLabel)
+        style_class: "wayvox-overlay-tone",
+      });
+      cardBox.add_child(toneLabel);
 
       const textLabel = new St.Label({
         text,
-        style_class: 'wayvox-overlay-text'
-      })
-      textLabel.clutter_text.set_line_wrap(true)
-      textLabel.clutter_text.set_ellipsize(0)
-      cardBox.add_child(textLabel)
+        style_class: "wayvox-overlay-text",
+      });
+      textLabel.clutter_text.set_line_wrap(true);
+      textLabel.clutter_text.set_ellipsize(0);
+      cardBox.add_child(textLabel);
 
-      card.set_child(cardBox)
+      card.set_child(cardBox);
 
-      const entry = { card, textLabel, text }
-      this._cards[tone] = entry
+      const entry = { card, textLabel, text };
+      this._cards[tone] = entry;
 
-      card.connect('clicked', () => {
+      card.connect("clicked", () => {
         if (this._onSelect && entry.card.reactive) {
-          const selectedText = entry.text
-          const callback = this._onSelect
-          this._dismiss()
-          callback(selectedText)
+          const selectedText = entry.text;
+          const callback = this._onSelect;
+          this._dismiss();
+          callback(selectedText);
         }
-      })
+      });
 
-      this.add_child(card)
+      this.add_child(card);
     }
 
-    updateCard (tone, text) {
-      const entry = this._cards[tone]
-      if (!entry) return
-      entry.text = text
-      entry.textLabel.set_text(text)
-      entry.card.reactive = true
-      this._reposition()
+    updateCard(tone, text) {
+      const entry = this._cards[tone];
+      if (!entry) return;
+      entry.text = text;
+      entry.textLabel.set_text(text);
+      entry.card.reactive = true;
+      this._reposition();
     }
 
-    _showAndPosition () {
-      const monitor = Main.layoutManager.primaryMonitor
-      if (!monitor) return
+    _showAndPosition() {
+      const monitor = Main.layoutManager.primaryMonitor;
+      if (!monitor) return;
 
-      const maxH = monitor.height - OVERLAY_PADDING * 2
-      this.style = `max-height: ${maxH}px;`
+      const maxH = monitor.height - OVERLAY_PADDING * 2;
+      this.style = `max-height: ${maxH}px;`;
 
-      this.set_position(monitor.x + monitor.width, monitor.y + monitor.height)
-      this.visible = true
+      this.set_position(monitor.x + monitor.width, monitor.y + monitor.height);
+      this.visible = true;
 
-      this._reposition()
+      this._reposition();
     }
 
-    _reposition () {
+    _reposition() {
       if (this._positionId) {
-        GLib.source_remove(this._positionId)
-        this._positionId = null
+        GLib.source_remove(this._positionId);
+        this._positionId = null;
       }
       this._positionId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-        this._positionId = null
-        const monitor = Main.layoutManager.primaryMonitor
-        if (!monitor) return GLib.SOURCE_REMOVE
+        this._positionId = null;
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor) return GLib.SOURCE_REMOVE;
         this.set_position(
           monitor.x + monitor.width - this.width - OVERLAY_PADDING,
-          monitor.y + monitor.height - this.height - OVERLAY_PADDING
-        )
-        return GLib.SOURCE_REMOVE
-      })
+          monitor.y + monitor.height - this.height - OVERLAY_PADDING,
+        );
+        return GLib.SOURCE_REMOVE;
+      });
     }
 
-    _dismiss () {
+    _dismiss() {
       if (this._positionId) {
-        GLib.source_remove(this._positionId)
-        this._positionId = null
+        GLib.source_remove(this._positionId);
+        this._positionId = null;
       }
       if (this._timeoutId) {
-        GLib.source_remove(this._timeoutId)
-        this._timeoutId = null
+        GLib.source_remove(this._timeoutId);
+        this._timeoutId = null;
       }
-      this.visible = false
-      this.style = null
-      this._cards = {}
-      this._onSelect = null
-      this.destroy_all_children()
+      this.visible = false;
+      this.style = null;
+      this._cards = {};
+      this._onSelect = null;
+      this.destroy_all_children();
     }
 
-    destroy () {
-      this._dismiss()
-      super.destroy()
+    destroy() {
+      this._dismiss();
+      super.destroy();
     }
-  }
-)
+  },
+);
 
 // ---------------------------------------------------------------------------
 // History picker overlay — floating card list at bottom-right
@@ -260,134 +266,143 @@ const LanguageBuddyOverlay = GObject.registerClass(
 
 const HistoryOverlay = GObject.registerClass(
   class HistoryOverlay extends St.BoxLayout {
-    _init () {
+    _init() {
       super._init({
         vertical: true,
-        style_class: 'wayvox-overlay',
+        style_class: "wayvox-overlay",
         reactive: true,
-        visible: false
-      })
-      this._timeoutId = null
+        visible: false,
+      });
+      this._timeoutId = null;
     }
 
-    show (items, timeoutSec = 10) {
-      this.destroy_all_children()
+    show(items, timeoutSec = 10) {
+      this.destroy_all_children();
 
-      const headerBox = new St.BoxLayout({ x_expand: true })
+      const headerBox = new St.BoxLayout({ x_expand: true });
       const headerLabel = new St.Label({
-        text: _('Transcription History'),
-        style_class: 'wayvox-overlay-header',
-        x_expand: true
-      })
+        text: _("Transcription History"),
+        style_class: "wayvox-overlay-header",
+        x_expand: true,
+      });
       const dismissBtn = new St.Button({
-        style_class: 'wayvox-overlay-dismiss',
-        child: new St.Label({ text: '✕' })
-      })
-      dismissBtn.connect('clicked', () => this._dismiss())
-      headerBox.add_child(headerLabel)
-      headerBox.add_child(dismissBtn)
-      this.add_child(headerBox)
+        style_class: "wayvox-overlay-dismiss",
+        child: new St.Label({ text: "✕" }),
+      });
+      dismissBtn.connect("clicked", () => this._dismiss());
+      headerBox.add_child(headerLabel);
+      headerBox.add_child(dismissBtn);
+      this.add_child(headerBox);
 
       for (const item of items) {
         const card = new St.Button({
-          style_class: 'wayvox-overlay-card',
+          style_class: "wayvox-overlay-card",
           x_expand: true,
           reactive: true,
-          track_hover: true
-        })
+          track_hover: true,
+        });
 
-        const cardBox = new St.BoxLayout({ vertical: true })
+        const cardBox = new St.BoxLayout({ vertical: true });
 
-        const ago = this._timeAgo(item.ts)
+        const ago = this._timeAgo(item.ts);
         const timeLabel = new St.Label({
           text: ago,
-          style_class: 'wayvox-overlay-tone'
-        })
-        cardBox.add_child(timeLabel)
+          style_class: "wayvox-overlay-tone",
+        });
+        cardBox.add_child(timeLabel);
 
         const textLabel = new St.Label({
-          text: item.text.length > 120 ? item.text.substring(0, 120) + '...' : item.text,
-          style_class: 'wayvox-overlay-text'
-        })
-        textLabel.clutter_text.set_line_wrap(true)
-        textLabel.clutter_text.set_ellipsize(0)
-        cardBox.add_child(textLabel)
+          text:
+            item.text.length > 120
+              ? item.text.substring(0, 120) + "..."
+              : item.text,
+          style_class: "wayvox-overlay-text",
+        });
+        textLabel.clutter_text.set_line_wrap(true);
+        textLabel.clutter_text.set_ellipsize(0);
+        cardBox.add_child(textLabel);
 
-        card.set_child(cardBox)
-        const fullText = item.text
-        card.connect('clicked', () => {
-          this._dismiss()
-          typeText(fullText).catch(e => logDebug(`typeText failed: ${e.message}`))
-        })
-        this.add_child(card)
+        card.set_child(cardBox);
+        const fullText = item.text;
+        card.connect("clicked", () => {
+          this._dismiss();
+          typeText(fullText).catch((e) =>
+            logDebug(`typeText failed: ${e.message}`),
+          );
+        });
+        this.add_child(card);
       }
 
-      this._showAndPosition()
+      this._showAndPosition();
 
       if (timeoutSec > 0) {
-        this._timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, timeoutSec, () => {
-          this._dismiss()
-          return GLib.SOURCE_REMOVE
-        })
+        this._timeoutId = GLib.timeout_add_seconds(
+          GLib.PRIORITY_DEFAULT,
+          timeoutSec,
+          () => {
+            this._dismiss();
+            return GLib.SOURCE_REMOVE;
+          },
+        );
       }
     }
 
-    _timeAgo (ts) {
-      const now = Date.now() / 1000
-      const diff = now - ts
-      if (diff < 60) return 'just now'
-      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-      if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-      return `${Math.floor(diff / 86400)}d ago`
+    _timeAgo(ts) {
+      const now = Date.now() / 1000;
+      const diff = now - ts;
+      if (diff < 60) return "just now";
+      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+      return `${Math.floor(diff / 86400)}d ago`;
     }
 
-    _showAndPosition () {
-      const monitor = Main.layoutManager.primaryMonitor
-      if (!monitor) return
-      const maxH = monitor.height - OVERLAY_PADDING * 2
-      this.style = `max-height: ${maxH}px;`
-      this.set_position(monitor.x + monitor.width, monitor.y + monitor.height)
-      this.visible = true
-      this._reposition()
+    _showAndPosition() {
+      const monitor = Main.layoutManager.primaryMonitor;
+      if (!monitor) return;
+      const maxH = monitor.height - OVERLAY_PADDING * 2;
+      this.style = `max-height: ${maxH}px;`;
+      this.set_position(monitor.x + monitor.width, monitor.y + monitor.height);
+      this.visible = true;
+      this._reposition();
     }
 
-    _reposition () {
+    _reposition() {
       if (this._positionId) {
-        GLib.source_remove(this._positionId)
-        this._positionId = null
+        GLib.source_remove(this._positionId);
+        this._positionId = null;
       }
       this._positionId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-        this._positionId = null
-        const monitor = Main.layoutManager.primaryMonitor
-        if (!monitor) return GLib.SOURCE_REMOVE
+        this._positionId = null;
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor) return GLib.SOURCE_REMOVE;
         this.set_position(
           monitor.x + monitor.width - this.width - OVERLAY_PADDING,
-          monitor.y + monitor.height - this.height - OVERLAY_PADDING
-        )
-        return GLib.SOURCE_REMOVE
-      })
+          monitor.y + monitor.height - this.height - OVERLAY_PADDING,
+        );
+        return GLib.SOURCE_REMOVE;
+      });
     }
 
-    _dismiss () {
+    _dismiss() {
       if (this._positionId) {
-        GLib.source_remove(this._positionId)
-        this._positionId = null
+        GLib.source_remove(this._positionId);
+        this._positionId = null;
       }
       if (this._timeoutId) {
-        GLib.source_remove(this._timeoutId)
-        this._timeoutId = null
+        GLib.source_remove(this._timeoutId);
+        this._timeoutId = null;
       }
-      this.visible = false
-      this.style = null
-      this.destroy_all_children()
+      this.visible = false;
+      this.style = null;
+      this.destroy_all_children();
     }
 
-    destroy () {
-      this._dismiss()
-      super.destroy()
+    destroy() {
+      this._dismiss();
+      super.destroy();
     }
-  }
-)
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Panel indicator with dropdown menu
@@ -395,964 +410,1125 @@ const HistoryOverlay = GObject.registerClass(
 
 const WayvoxIndicator = GObject.registerClass(
   class WayvoxIndicator extends PanelMenu.Button {
-    _init (extension) {
-      super._init(0.0, _('Wayvox'))
+    _init(extension) {
+      super._init(0.0, _("Wayvox"));
 
-      this._extension = extension
-      this._settings = extension.getSettings()
-      this._connected = false
-      this._currentModel = null
-      this._cachedRemoteModels = []
-      this._cachedRemoteLlmModels = []
-      this._cacheReady = false
-      this._currentLlmModel = null
+      this._extension = extension;
+      this._settings = extension.getSettings();
+      this._connected = false;
+      this._currentModel = null;
+      this._cachedRemoteModels = [];
+      this._cachedRemoteLlmModels = [];
+      this._cacheReady = false;
+      this._currentLlmModel = null;
 
       this._client = new WhisperClient(
-        this._settings.get_string('server-host'),
-        this._settings.get_int('server-port')
-      )
-      this._hfClient = new HuggingFaceClient()
+        this._settings.get_string("server-host"),
+        this._settings.get_int("server-port"),
+      );
+      this._hfClient = new HuggingFaceClient();
 
-      const iconPath = GLib.build_filenamev([extension.path, 'icons', 'wayvox-symbolic.svg'])
-      const gicon = Gio.icon_new_for_string(iconPath)
+      const iconPath = GLib.build_filenamev([
+        extension.path,
+        "icons",
+        "wayvox-symbolic.svg",
+      ]);
+      const gicon = Gio.icon_new_for_string(iconPath);
       const icon = new St.Icon({
         gicon,
-        style_class: 'system-status-icon'
-      })
-      this.add_child(icon)
+        style_class: "system-status-icon",
+      });
+      this.add_child(icon);
 
-      this._buildMenu()
+      this._buildMenu();
 
-      this.menu.connect('open-state-changed', (_menu, isOpen) => {
-        if (isOpen) this._refreshStatus()
-      })
+      this.menu.connect("open-state-changed", (_menu, isOpen) => {
+        if (isOpen) this._refreshStatus();
+      });
 
-      this._settingsChangedId = this._settings.connect('changed', (settings, key) => {
-        if (key === 'server-host' || key === 'server-port') {
-          this._client.destroy()
-          this._client = new WhisperClient(
-            settings.get_string('server-host'),
-            settings.get_int('server-port')
-          )
-        }
-        try {
-          writeSettingsJson(this._gatherSettings())
-        } catch (e) {
-          // Ignore config file write errors
-        }
-      })
+      this._settingsChangedId = this._settings.connect(
+        "changed",
+        (settings, key) => {
+          if (key === "server-host" || key === "server-port") {
+            this._client.destroy();
+            this._client = new WhisperClient(
+              settings.get_string("server-host"),
+              settings.get_int("server-port"),
+            );
+          }
+          try {
+            writeSettingsJson(this._gatherSettings());
+          } catch {
+            // Ignore config file write errors
+          }
+        },
+      );
 
       try {
-        writeSettingsJson(this._gatherSettings())
-      } catch (e) {
+        writeSettingsJson(this._gatherSettings());
+      } catch {
         // Ignore initial config write errors
       }
 
       // Overlays
-      this._overlay = new LanguageBuddyOverlay()
+      this._overlay = new LanguageBuddyOverlay();
       Main.layoutManager.addChrome(this._overlay, {
         affectsStruts: false,
-        trackFullscreen: false
-      })
+        trackFullscreen: false,
+      });
 
-      this._historyOverlay = new HistoryOverlay()
+      this._historyOverlay = new HistoryOverlay();
       Main.layoutManager.addChrome(this._historyOverlay, {
         affectsStruts: false,
-        trackFullscreen: false
-      })
+        trackFullscreen: false,
+      });
 
       // D-Bus
-      this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(DBUS_IFACE, this)
-      this._dbusImpl.export(Gio.DBus.session, '/com/whisper/LanguageBuddy')
+      this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(DBUS_IFACE, this);
+      this._dbusImpl.export(Gio.DBus.session, "/com/whisper/LanguageBuddy");
 
-      this._preloadCache()
+      this._preloadCache();
     }
 
-    async _preloadCache () {
+    async _preloadCache() {
       try {
-        const org = this._settings.get_string('hf-org')
-        const [health, remoteModels, remoteLlmModels, llmInfo] = await Promise.all([
-          this._client.getHealth(),
-          this._hfClient.searchModels(org),
-          this._hfClient.searchLlmModels(org),
-          this._client.getLlmModels()
-        ])
+        const org = this._settings.get_string("hf-org");
+        const [health, remoteModels, remoteLlmModels, llmInfo] =
+          await Promise.all([
+            this._client.getHealth(),
+            this._hfClient.searchModels(org),
+            this._hfClient.searchLlmModels(org),
+            this._client.getLlmModels(),
+          ]);
 
         if (health) {
-          this._connected = true
-          this._currentModel = health.model
+          this._connected = true;
+          this._currentModel = health.model;
         }
 
-        this._currentLlmModel = llmInfo ? llmInfo.current : null
+        this._currentLlmModel = llmInfo ? llmInfo.current : null;
 
-        this._cachedRemoteModels = remoteModels || []
-        this._cachedRemoteLlmModels = remoteLlmModels || []
-        this._cacheReady = true
-        logDebug(`Preloaded ${this._cachedRemoteModels.length} STT and ${this._cachedRemoteLlmModels.length} LLM remote models`)
+        this._cachedRemoteModels = remoteModels || [];
+        this._cachedRemoteLlmModels = remoteLlmModels || [];
+        this._cacheReady = true;
+        logDebug(
+          `Preloaded ${this._cachedRemoteModels.length} STT and ${this._cachedRemoteLlmModels.length} LLM remote models`,
+        );
 
-        this._populateModelSection()
-        this._populateLlmModelSection()
+        this._populateModelSection();
+        this._populateLlmModelSection();
       } catch (e) {
-        logDebug(`Preload failed: ${e.message}`)
-        this._cacheReady = true
+        logDebug(`Preload failed: ${e.message}`);
+        this._cacheReady = true;
       }
     }
 
     // -- D-Bus method handler -----------------------------------------------
 
-    HandleTranscription (text) {
-      const enabled = this._settings.get_boolean('language-buddy-enabled')
-      if (!enabled) return false
+    HandleTranscription(text) {
+      const enabled = this._settings.get_boolean("language-buddy-enabled");
+      if (!enabled) return false;
 
-      logDebug(`Language Buddy received: ${text.substring(0, 80)}`)
-      this._processTranscription(text)
-      return true
+      logDebug(`Language Buddy received: ${text.substring(0, 80)}`);
+      this._processTranscription(text);
+      return true;
     }
 
-    HandleTranscriptionWithContext (text, contextJson) {
-      const enabled = this._settings.get_boolean('language-buddy-enabled')
-      if (!enabled) return false
+    HandleTranscriptionWithContext(text, contextJson) {
+      const enabled = this._settings.get_boolean("language-buddy-enabled");
+      if (!enabled) return false;
 
-      logDebug(`Context-aware transcription: ${text.substring(0, 80)}`)
+      logDebug(`Context-aware transcription: ${text.substring(0, 80)}`);
       try {
-        const context = JSON.parse(contextJson)
-        const tones = context.tones && context.tones.length > 0 ? context.tones : DEFAULT_TONES
-        this._processTranscription(text, tones)
+        const context = JSON.parse(contextJson);
+        const tones =
+          context.tones && context.tones.length > 0
+            ? context.tones
+            : DEFAULT_TONES;
+        this._processTranscription(text, tones);
       } catch (e) {
-        logDebug(`Context parse error: ${e.message}`)
-        this._processTranscription(text)
+        logDebug(`Context parse error: ${e.message}`);
+        this._processTranscription(text);
       }
-      return true
+      return true;
     }
 
-    GetFocusedApp () {
+    GetFocusedApp() {
       try {
-        const focusWindow = global.display.focus_window
-        if (!focusWindow) return ['', '']
-        const tracker = Shell.WindowTracker.get_default()
-        const app = tracker.get_window_app(focusWindow)
-        const appId = app ? app.get_id() : ''
-        const title = focusWindow.get_title() || ''
-        return [appId, title]
+        const focusWindow = global.display.focus_window;
+        if (!focusWindow) return ["", ""];
+        const tracker = Shell.WindowTracker.get_default();
+        const app = tracker.get_window_app(focusWindow);
+        const appId = app ? app.get_id() : "";
+        const title = focusWindow.get_title() || "";
+        return [appId, title];
       } catch (e) {
-        logDebug(`GetFocusedApp error: ${e.message}`)
-        return ['', '']
-      }
-    }
-
-    ShowHistoryPicker (itemsJson) {
-      try {
-        const items = JSON.parse(itemsJson)
-        if (!items || items.length === 0) return false
-        this._historyOverlay.show(items, 10)
-        return true
-      } catch (e) {
-        logDebug(`ShowHistoryPicker error: ${e.message}`)
-        return false
+        logDebug(`GetFocusedApp error: ${e.message}`);
+        return ["", ""];
       }
     }
 
-    async _processTranscription (text, tones = null) {
-      const bypass = this._settings.get_boolean('language-buddy-bypass')
+    ShowHistoryPicker(itemsJson) {
+      try {
+        const items = JSON.parse(itemsJson);
+        if (!items || items.length === 0) return false;
+        this._historyOverlay.show(items, 10);
+        return true;
+      } catch (e) {
+        logDebug(`ShowHistoryPicker error: ${e.message}`);
+        return false;
+      }
+    }
+
+    async _processTranscription(text, tones = null) {
+      const bypass = this._settings.get_boolean("language-buddy-bypass");
 
       if (bypass) {
-        typeText(text).catch(e => logDebug(`typeText failed: ${e.message}`))
+        typeText(text).catch((e) => logDebug(`typeText failed: ${e.message}`));
       }
 
-      const timeoutSec = this._settings.get_int('language-buddy-timeout')
-      tones = tones || (text.length > 50
-        ? [...DEFAULT_TONES, 'summarize']
-        : DEFAULT_TONES)
+      const timeoutSec = this._settings.get_int("language-buddy-timeout");
+      tones =
+        tones ||
+        (text.length > 50 ? [...DEFAULT_TONES, "summarize"] : DEFAULT_TONES);
 
       const onSelect = bypass
         ? async (selectedText) => {
-            if (selectedText === text) return
+            if (selectedText === text) return;
             try {
-              await backspaceN(text.length)
-              await typeText(selectedText)
+              await backspaceN(text.length);
+              await typeText(selectedText);
             } catch (e) {
-              logDebug(`Replace failed: ${e.message}`)
+              logDebug(`Replace failed: ${e.message}`);
             }
           }
         : async (selectedText) => {
             try {
-              await typeText(selectedText)
+              await typeText(selectedText);
             } catch (e) {
-              logDebug(`typeText failed: ${e.message}`)
+              logDebug(`typeText failed: ${e.message}`);
             }
-          }
+          };
 
-      this._overlay.show(tones, text, onSelect, timeoutSec)
+      this._overlay.show(tones, text, onSelect, timeoutSec);
 
       for (const tone of tones) {
         try {
-          const result = await this._client.rewrite(text, [tone])
+          const result = await this._client.rewrite(text, [tone]);
           if (result && result.variants) {
-            const variant = result.variants.find(v => v.tone === tone)
+            const variant = result.variants.find((v) => v.tone === tone);
             if (variant && !variant.error) {
-              this._overlay.updateCard(tone, variant.text)
+              this._overlay.updateCard(tone, variant.text);
             } else {
-              this._overlay.updateCard(tone, text)
+              this._overlay.updateCard(tone, text);
             }
           } else {
-            this._overlay.updateCard(tone, text)
+            this._overlay.updateCard(tone, text);
           }
         } catch (e) {
-          logDebug(`Rewrite (${tone}) failed: ${e.message}`)
-          this._overlay.updateCard(tone, text)
+          logDebug(`Rewrite (${tone}) failed: ${e.message}`);
+          this._overlay.updateCard(tone, text);
         }
       }
     }
 
     // -- Menu ---------------------------------------------------------------
 
-    _makeIconSubMenu (text, iconName) {
-      const item = new PopupMenu.PopupSubMenuMenuItem(text)
-      this._addIconToMenuItem(item, iconName)
-      return item
+    _makeIconSubMenu(text, iconName) {
+      const item = new PopupMenu.PopupSubMenuMenuItem(text);
+      this._addIconToMenuItem(item, iconName);
+      return item;
     }
 
-    _setOptionSelected (item, selected) {
-      item.setOrnament(selected ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NONE)
-      if (selected)
-        item.remove_style_class_name('wayvox-option-unselected')
-      else
-        item.add_style_class_name('wayvox-option-unselected')
+    _setOptionSelected(item, selected) {
+      item.setOrnament(
+        selected ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NONE,
+      );
+      if (selected) item.remove_style_class_name("wayvox-option-unselected");
+      else item.add_style_class_name("wayvox-option-unselected");
     }
 
-    _addIconToMenuItem (item, iconName) {
-      const icon = new St.Icon({ icon_name: iconName, style_class: 'popup-menu-icon' })
-      item.insert_child_at_index(icon, 1)
-      return item
+    _addIconToMenuItem(item, iconName) {
+      const icon = new St.Icon({
+        icon_name: iconName,
+        style_class: "popup-menu-icon",
+      });
+      item.insert_child_at_index(icon, 1);
+      return item;
     }
 
-    _buildMenu () {
-      this._statusItem = new PopupMenu.PopupMenuItem(_('Status: Checking...'), { reactive: false })
-      this._statusItem.label.add_style_class_name('wayvox-status-label')
-      this.menu.addMenuItem(this._statusItem)
-      this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
+    _buildMenu() {
+      this._statusItem = new PopupMenu.PopupMenuItem(_("Status: Checking..."), {
+        reactive: false,
+      });
+      this._statusItem.label.add_style_class_name("wayvox-status-label");
+      this.menu.addMenuItem(this._statusItem);
+      this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-      const settingsSection = this._makeIconSubMenu(_('Settings'), 'preferences-system-symbolic')
-      this._buildSettingsGroup(settingsSection)
-      this.menu.addMenuItem(settingsSection)
+      const settingsSection = this._makeIconSubMenu(
+        _("Settings"),
+        "preferences-system-symbolic",
+      );
+      this._buildSettingsGroup(settingsSection);
+      this.menu.addMenuItem(settingsSection);
 
-      const featuresSection = this._makeIconSubMenu(_('Features'), 'applications-utilities-symbolic')
-      this._buildFeaturesGroup(featuresSection)
-      this.menu.addMenuItem(featuresSection)
+      const featuresSection = this._makeIconSubMenu(
+        _("Features"),
+        "applications-utilities-symbolic",
+      );
+      this._buildFeaturesGroup(featuresSection);
+      this.menu.addMenuItem(featuresSection);
 
-      const modelsSection = this._makeIconSubMenu(_('Models'), 'drive-harddisk-symbolic')
-      this._buildModelsGroup(modelsSection)
-      this.menu.addMenuItem(modelsSection)
+      const modelsSection = this._makeIconSubMenu(
+        _("Models"),
+        "drive-harddisk-symbolic",
+      );
+      this._buildModelsGroup(modelsSection);
+      this.menu.addMenuItem(modelsSection);
 
-      this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
+      this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-      this._restartServerItem = new PopupMenu.PopupMenuItem(_('Restart Server'))
-      this._addIconToMenuItem(this._restartServerItem, 'view-refresh-symbolic')
-      this._restartServerItem.connect('activate', () => this._restartServer())
-      this.menu.addMenuItem(this._restartServerItem)
+      this._restartServerItem = new PopupMenu.PopupMenuItem(
+        _("Restart Server"),
+      );
+      this._addIconToMenuItem(this._restartServerItem, "view-refresh-symbolic");
+      this._restartServerItem.connect("activate", () => this._restartServer());
+      this.menu.addMenuItem(this._restartServerItem);
 
-      const vocabItem = new PopupMenu.PopupMenuItem(_('Edit Vocabulary...'))
-      this._addIconToMenuItem(vocabItem, 'accessories-dictionary-symbolic')
-      vocabItem.connect('activate', () => {
+      const vocabItem = new PopupMenu.PopupMenuItem(_("Edit Vocabulary..."));
+      this._addIconToMenuItem(vocabItem, "accessories-dictionary-symbolic");
+      vocabItem.connect("activate", () => {
         if (!openVocabEditor(this._extension.path))
-          Main.notify(_('Wayvox'), _('Vocabulary editor not found'))
-      })
-      this.menu.addMenuItem(vocabItem)
+          Main.notify(_("Wayvox"), _("Vocabulary editor not found"));
+      });
+      this.menu.addMenuItem(vocabItem);
 
-      const aboutItem = new PopupMenu.PopupMenuItem(_('About...'))
-      this._addIconToMenuItem(aboutItem, 'help-about-symbolic')
-      aboutItem.connect('activate', () => {
-        const host = this._settings.get_string('server-host')
-        const port = this._settings.get_int('server-port')
+      const aboutItem = new PopupMenu.PopupMenuItem(_("About..."));
+      this._addIconToMenuItem(aboutItem, "help-about-symbolic");
+      aboutItem.connect("activate", () => {
+        const host = this._settings.get_string("server-host");
+        const port = this._settings.get_int("server-port");
         if (!openAbout(this._extension.path, host, port))
-          Main.notify(_('Wayvox'), _('About dialog not found'))
-      })
-      this.menu.addMenuItem(aboutItem)
+          Main.notify(_("Wayvox"), _("About dialog not found"));
+      });
+      this.menu.addMenuItem(aboutItem);
 
-      const prefsItem = new PopupMenu.PopupMenuItem(_('Preferences...'))
-      this._addIconToMenuItem(prefsItem, 'preferences-other-symbolic')
-      prefsItem.connect('activate', () => this._extension.openPreferences())
-      this.menu.addMenuItem(prefsItem)
+      const prefsItem = new PopupMenu.PopupMenuItem(_("Preferences..."));
+      this._addIconToMenuItem(prefsItem, "preferences-other-symbolic");
+      prefsItem.connect("activate", () => this._extension.openPreferences());
+      this.menu.addMenuItem(prefsItem);
 
       // Fix for nested PopupSubMenuMenuItem: GNOME Shell's _setOpenedSubMenu has
       // accordion behavior that closes the parent submenu (Settings) when a child
       // submenu (Device etc.) opens, because it traverses to the top-level menu and
       // treats all submenus as siblings. Override it to detect nesting and skip the
       // accordion close when the new submenu is inside the currently open one.
-      if (typeof this.menu._setOpenedSubMenu === 'function') {
-        this.menu._lastNestedSubMenu = null
-        const orig = this.menu._setOpenedSubMenu.bind(this.menu)
+      if (typeof this.menu._setOpenedSubMenu === "function") {
+        this.menu._lastNestedSubMenu = null;
+        const orig = this.menu._setOpenedSubMenu.bind(this.menu);
         this.menu._setOpenedSubMenu = (submenu) => {
           if (submenu === null) {
             if (this.menu._lastNestedSubMenu !== null) {
-              this.menu._lastNestedSubMenu = null
-              return
+              this.menu._lastNestedSubMenu = null;
+              return;
             }
-            orig(null)
-            return
+            orig(null);
+            return;
           }
-          const currentlyOpen = this.menu._openedSubMenu
+          const currentlyOpen = this.menu._openedSubMenu;
           if (currentlyOpen && currentlyOpen !== submenu) {
-            const parentActor = currentlyOpen.actor
-            const childSource = submenu.sourceActor
-            if (parentActor && childSource && parentActor.contains(childSource)) {
-              if (this.menu._lastNestedSubMenu && this.menu._lastNestedSubMenu !== submenu)
-                this.menu._lastNestedSubMenu.close(true)
-              this.menu._lastNestedSubMenu = submenu
-              return
+            const parentActor = currentlyOpen.actor;
+            const childSource = submenu.sourceActor;
+            if (
+              parentActor &&
+              childSource &&
+              parentActor.contains(childSource)
+            ) {
+              if (
+                this.menu._lastNestedSubMenu &&
+                this.menu._lastNestedSubMenu !== submenu
+              )
+                this.menu._lastNestedSubMenu.close(true);
+              this.menu._lastNestedSubMenu = submenu;
+              return;
             }
           }
-          this.menu._lastNestedSubMenu = null
-          orig(submenu)
-        }
+          this.menu._lastNestedSubMenu = null;
+          orig(submenu);
+        };
       }
     }
 
-    _buildSettingsGroup (section) {
+    _buildSettingsGroup(section) {
       this._deviceSection = this._makeIconSubMenu(
-        _(`Device: ${this._settings.get_string('device')}`),
-        'computer-symbolic'
-      )
-      this._buildRadioGroup(this._deviceSection, DEVICES, 'device', 'computer-symbolic')
-      section.menu.addMenuItem(this._deviceSection)
+        _(`Device: ${this._settings.get_string("device")}`),
+        "computer-symbolic",
+      );
+      this._buildRadioGroup(
+        this._deviceSection,
+        DEVICES,
+        "device",
+        "computer-symbolic",
+      );
+      section.menu.addMenuItem(this._deviceSection);
 
       this._backendSection = this._makeIconSubMenu(
-        _(`Backend: ${this._settings.get_string('backend')}`),
-        'network-server-symbolic'
-      )
-      this._buildRadioGroup(this._backendSection, BACKENDS, 'backend', 'network-server-symbolic')
-      section.menu.addMenuItem(this._backendSection)
+        _(`Backend: ${this._settings.get_string("backend")}`),
+        "network-server-symbolic",
+      );
+      this._buildRadioGroup(
+        this._backendSection,
+        BACKENDS,
+        "backend",
+        "network-server-symbolic",
+      );
+      section.menu.addMenuItem(this._backendSection);
 
       this._hotkeySection = this._makeIconSubMenu(
-        _(`Hotkey: ${this._formatHotkey(this._settings.get_string('hotkey'))}`),
-        'input-keyboard-symbolic'
-      )
-      this._buildHotkeyGroup(this._hotkeySection)
-      section.menu.addMenuItem(this._hotkeySection)
+        _(`Hotkey: ${this._formatHotkey(this._settings.get_string("hotkey"))}`),
+        "input-keyboard-symbolic",
+      );
+      this._buildHotkeyGroup(this._hotkeySection);
+      section.menu.addMenuItem(this._hotkeySection);
 
       this._recallKeySection = this._makeIconSubMenu(
-        _(`Recall Key: ${this._formatHotkey(this._settings.get_string('recall-key'))}`),
-        'appointment-soon-symbolic'
-      )
-      this._buildRecallKeyGroup(this._recallKeySection)
-      section.menu.addMenuItem(this._recallKeySection)
+        _(
+          `Recall Key: ${this._formatHotkey(this._settings.get_string("recall-key"))}`,
+        ),
+        "appointment-soon-symbolic",
+      );
+      this._buildRecallKeyGroup(this._recallKeySection);
+      section.menu.addMenuItem(this._recallKeySection);
 
-      const currentLang = this._settings.get_string('language')
-      const langLabel = LANGUAGES.find(l => l[1] === currentLang)
+      const currentLang = this._settings.get_string("language");
+      const langLabel = LANGUAGES.find((l) => l[1] === currentLang);
       this._languageSection = this._makeIconSubMenu(
-        _(`Language: ${langLabel ? langLabel[0] : 'Auto'}`),
-        'preferences-desktop-locale-symbolic'
-      )
-      this._buildLanguageGroup(this._languageSection)
-      section.menu.addMenuItem(this._languageSection)
+        _(`Language: ${langLabel ? langLabel[0] : "Auto"}`),
+        "preferences-desktop-locale-symbolic",
+      );
+      this._buildLanguageGroup(this._languageSection);
+      section.menu.addMenuItem(this._languageSection);
 
-      const currentTranslate = this._settings.get_string('translate-to')
-      const translateLabel = TRANSLATE_TARGETS.find(t => t[1] === currentTranslate)
+      const currentTranslate = this._settings.get_string("translate-to");
+      const translateLabel = TRANSLATE_TARGETS.find(
+        (t) => t[1] === currentTranslate,
+      );
       this._translateSection = this._makeIconSubMenu(
-        _(`Translate To: ${translateLabel ? translateLabel[0] : 'Disabled'}`),
-        'edit-find-replace-symbolic'
-      )
-      this._buildTranslateGroup(this._translateSection)
-      section.menu.addMenuItem(this._translateSection)
+        _(`Translate To: ${translateLabel ? translateLabel[0] : "Disabled"}`),
+        "edit-find-replace-symbolic",
+      );
+      this._buildTranslateGroup(this._translateSection);
+      section.menu.addMenuItem(this._translateSection);
 
       this._vadSection = this._makeIconSubMenu(
-        _(`VAD Threshold: ${this._settings.get_int('vad-threshold')} dB`),
-        'audio-input-microphone-symbolic'
-      )
+        _(`VAD Threshold: ${this._settings.get_int("vad-threshold")} dB`),
+        "audio-input-microphone-symbolic",
+      );
       const vadOptions = [
-        ['-20 dB (aggressive)', -20],
-        ['-30 dB', -30],
-        ['-40 dB (default)', -40],
-        ['-50 dB', -50],
-        ['-60 dB (sensitive)', -60]
-      ]
-      const currentVad = this._settings.get_int('vad-threshold')
+        ["-20 dB (aggressive)", -20],
+        ["-30 dB", -30],
+        ["-40 dB (default)", -40],
+        ["-50 dB", -50],
+        ["-60 dB (sensitive)", -60],
+      ];
+      const currentVad = this._settings.get_int("vad-threshold");
       for (const [label, value] of vadOptions) {
-        const item = new PopupMenu.PopupMenuItem(label)
-        this._addIconToMenuItem(item, 'audio-input-microphone-symbolic')
-        this._setOptionSelected(item, value === currentVad)
-        item.connect('activate', () => {
-          this._settings.set_int('vad-threshold', value)
-          this._vadSection.label.set_text(`VAD Threshold: ${value} dB`)
-          const items = this._vadSection.menu._getMenuItems()
+        const item = new PopupMenu.PopupMenuItem(label);
+        this._addIconToMenuItem(item, "audio-input-microphone-symbolic");
+        this._setOptionSelected(item, value === currentVad);
+        item.connect("activate", () => {
+          this._settings.set_int("vad-threshold", value);
+          this._vadSection.label.set_text(`VAD Threshold: ${value} dB`);
+          const items = this._vadSection.menu._getMenuItems();
           for (const [i, mi] of items.entries()) {
             if (mi.label && i < vadOptions.length)
-              this._setOptionSelected(mi, vadOptions[i][1] === value)
+              this._setOptionSelected(mi, vadOptions[i][1] === value);
           }
-        })
-        this._vadSection.menu.addMenuItem(item)
+        });
+        this._vadSection.menu.addMenuItem(item);
       }
-      section.menu.addMenuItem(this._vadSection)
+      section.menu.addMenuItem(this._vadSection);
 
       this._streamIntervalSection = this._makeIconSubMenu(
-        _(`Stream Interval: ${this._settings.get_double('stream-interval')}s`),
-        'media-playlist-repeat-symbolic'
-      )
+        _(`Stream Interval: ${this._settings.get_double("stream-interval")}s`),
+        "media-playlist-repeat-symbolic",
+      );
       const intervalOptions = [
-        ['1.0s (fast)', 1.0],
-        ['2.0s', 2.0],
-        ['3.0s (default)', 3.0],
-        ['5.0s', 5.0],
-        ['10.0s (slow)', 10.0]
-      ]
-      const currentInterval = this._settings.get_double('stream-interval')
+        ["1.0s (fast)", 1.0],
+        ["2.0s", 2.0],
+        ["3.0s (default)", 3.0],
+        ["5.0s", 5.0],
+        ["10.0s (slow)", 10.0],
+      ];
+      const currentInterval = this._settings.get_double("stream-interval");
       for (const [label, value] of intervalOptions) {
-        const item = new PopupMenu.PopupMenuItem(label)
-        this._addIconToMenuItem(item, 'media-playlist-repeat-symbolic')
-        this._setOptionSelected(item, value === currentInterval)
-        item.connect('activate', () => {
-          this._settings.set_double('stream-interval', value)
-          this._streamIntervalSection.label.set_text(`Stream Interval: ${value}s`)
-          const items = this._streamIntervalSection.menu._getMenuItems()
+        const item = new PopupMenu.PopupMenuItem(label);
+        this._addIconToMenuItem(item, "media-playlist-repeat-symbolic");
+        this._setOptionSelected(item, value === currentInterval);
+        item.connect("activate", () => {
+          this._settings.set_double("stream-interval", value);
+          this._streamIntervalSection.label.set_text(
+            `Stream Interval: ${value}s`,
+          );
+          const items = this._streamIntervalSection.menu._getMenuItems();
           for (const [i, mi] of items.entries()) {
             if (mi.label && i < intervalOptions.length)
-              this._setOptionSelected(mi, intervalOptions[i][1] === value)
+              this._setOptionSelected(mi, intervalOptions[i][1] === value);
           }
-        })
-        this._streamIntervalSection.menu.addMenuItem(item)
+        });
+        this._streamIntervalSection.menu.addMenuItem(item);
       }
-      section.menu.addMenuItem(this._streamIntervalSection)
+      section.menu.addMenuItem(this._streamIntervalSection);
     }
 
-    _buildModelsGroup (section) {
-      this._modelSection = this._makeIconSubMenu(_('Speech-to-Text Models'), 'audio-input-microphone-symbolic')
+    _buildModelsGroup(section) {
+      this._modelSection = this._makeIconSubMenu(
+        _("Speech-to-Text Models"),
+        "audio-input-microphone-symbolic",
+      );
       this._modelSection.menu.addMenuItem(
-        new PopupMenu.PopupMenuItem(_('Loading...'), { reactive: false })
-      )
-      section.menu.addMenuItem(this._modelSection)
+        new PopupMenu.PopupMenuItem(_("Loading..."), { reactive: false }),
+      );
+      section.menu.addMenuItem(this._modelSection);
 
-      this._llmModelSection = this._makeIconSubMenu(_('Language Buddy Models'), 'chat-message-new-symbolic')
+      this._llmModelSection = this._makeIconSubMenu(
+        _("Language Buddy Models"),
+        "chat-message-new-symbolic",
+      );
       this._llmModelSection.menu.addMenuItem(
-        new PopupMenu.PopupMenuItem(_('Loading...'), { reactive: false })
-      )
-      section.menu.addMenuItem(this._llmModelSection)
+        new PopupMenu.PopupMenuItem(_("Loading..."), { reactive: false }),
+      );
+      section.menu.addMenuItem(this._llmModelSection);
 
-      section.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
+      section.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-      this._exportSection = this._makeIconSubMenu(_('Export History'), 'document-save-symbolic')
+      this._exportSection = this._makeIconSubMenu(
+        _("Export History"),
+        "document-save-symbolic",
+      );
       for (const [label, fmt, icon] of [
-        ['JSON', 'json', 'text-x-generic-symbolic'],
-        ['Markdown', 'markdown', 'text-x-generic-symbolic'],
-        ['SRT (Subtitles)', 'srt', 'media-optical-symbolic']
+        ["JSON", "json", "text-x-generic-symbolic"],
+        ["Markdown", "markdown", "text-x-generic-symbolic"],
+        ["SRT (Subtitles)", "srt", "media-optical-symbolic"],
       ]) {
-        const item = new PopupMenu.PopupMenuItem(label)
-        this._addIconToMenuItem(item, icon)
-        item.connect('activate', () => this._exportHistory(fmt))
-        this._exportSection.menu.addMenuItem(item)
+        const item = new PopupMenu.PopupMenuItem(label);
+        this._addIconToMenuItem(item, icon);
+        item.connect("activate", () => this._exportHistory(fmt));
+        this._exportSection.menu.addMenuItem(item);
       }
-      section.menu.addMenuItem(this._exportSection)
+      section.menu.addMenuItem(this._exportSection);
     }
 
-    _buildFeaturesGroup (section) {
+    _buildFeaturesGroup(section) {
       const addToggle = (label, key, icon) => {
         const toggle = new PopupMenu.PopupSwitchMenuItem(
-          _(label), this._settings.get_boolean(key)
-        )
-        this._addIconToMenuItem(toggle, icon)
-        toggle.connect('toggled', (_item, state) => {
-          this._settings.set_boolean(key, state)
-        })
-        section.menu.addMenuItem(toggle)
-        return toggle
-      }
+          _(label),
+          this._settings.get_boolean(key),
+        );
+        this._addIconToMenuItem(toggle, icon);
+        toggle.connect("toggled", (_item, state) => {
+          this._settings.set_boolean(key, state);
+        });
+        section.menu.addMenuItem(toggle);
+        return toggle;
+      };
 
-      this._buddyToggle = addToggle('Language Buddy', 'language-buddy-enabled', 'chat-message-new-symbolic')
-      this._bypassToggle = addToggle('Buddy Bypass', 'language-buddy-bypass', 'media-skip-forward-symbolic')
+      this._buddyToggle = addToggle(
+        "Language Buddy",
+        "language-buddy-enabled",
+        "chat-message-new-symbolic",
+      );
+      this._bypassToggle = addToggle(
+        "Buddy Bypass",
+        "language-buddy-bypass",
+        "media-skip-forward-symbolic",
+      );
 
-      section.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
+      section.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-      this._voiceCommandsToggle = addToggle('Voice Commands', 'voice-commands-enabled', 'audio-input-microphone-symbolic')
-      this._notificationsToggle = addToggle('Notifications', 'notifications-enabled', 'dialog-information-symbolic')
-      this._autoPunctuateToggle = addToggle('Auto-Punctuate', 'auto-punctuate', 'document-edit-symbolic')
-      this._audioFeedbackToggle = addToggle('Audio Feedback', 'audio-feedback-enabled', 'audio-volume-high-symbolic')
-      this._formattingToggle = addToggle('Dictation Formatting', 'dictation-formatting-enabled', 'format-indent-more-symbolic')
-      this._muteStreamsToggle = addToggle('Mute Other Streams', 'mute-other-streams', 'audio-volume-muted-symbolic')
-      this._clipboardModeToggle = addToggle('Clipboard Paste', 'clipboard-mode', 'edit-paste-symbolic')
+      this._voiceCommandsToggle = addToggle(
+        "Voice Commands",
+        "voice-commands-enabled",
+        "audio-input-microphone-symbolic",
+      );
+      this._notificationsToggle = addToggle(
+        "Notifications",
+        "notifications-enabled",
+        "dialog-information-symbolic",
+      );
+      this._autoPunctuateToggle = addToggle(
+        "Auto-Punctuate",
+        "auto-punctuate",
+        "document-edit-symbolic",
+      );
+      this._audioFeedbackToggle = addToggle(
+        "Audio Feedback",
+        "audio-feedback-enabled",
+        "audio-volume-high-symbolic",
+      );
+      this._formattingToggle = addToggle(
+        "Dictation Formatting",
+        "dictation-formatting-enabled",
+        "format-indent-more-symbolic",
+      );
+      this._muteStreamsToggle = addToggle(
+        "Mute Other Streams",
+        "mute-other-streams",
+        "audio-volume-muted-symbolic",
+      );
+      this._clipboardModeToggle = addToggle(
+        "Clipboard Paste",
+        "clipboard-mode",
+        "edit-paste-symbolic",
+      );
     }
 
     // -- Radio groups -------------------------------------------------------
 
-    _buildRadioGroup (section, options, settingKey, iconName) {
-      const current = this._settings.get_string(settingKey)
+    _buildRadioGroup(section, options, settingKey, iconName) {
+      const current = this._settings.get_string(settingKey);
       for (const option of options) {
-        const item = new PopupMenu.PopupMenuItem(option)
-        if (iconName) this._addIconToMenuItem(item, iconName)
-        this._setOptionSelected(item, option === current)
-        item.connect('activate', () => {
-          this._settings.set_string(settingKey, option)
-          section.label.set_text(`${settingKey.charAt(0).toUpperCase() + settingKey.slice(1)}: ${option}`)
-          this._updateRadioOrnaments(section, option)
-        })
-        section.menu.addMenuItem(item)
+        const item = new PopupMenu.PopupMenuItem(option);
+        if (iconName) this._addIconToMenuItem(item, iconName);
+        this._setOptionSelected(item, option === current);
+        item.connect("activate", () => {
+          this._settings.set_string(settingKey, option);
+          section.label.set_text(
+            `${settingKey.charAt(0).toUpperCase() + settingKey.slice(1)}: ${option}`,
+          );
+          this._updateRadioOrnaments(section, option);
+        });
+        section.menu.addMenuItem(item);
       }
     }
 
-    _buildLanguageGroup (section) {
-      const current = this._settings.get_string('language')
+    _buildLanguageGroup(section) {
+      const current = this._settings.get_string("language");
       for (const [label, code] of LANGUAGES) {
-        const item = new PopupMenu.PopupMenuItem(label)
-        this._addIconToMenuItem(item, 'preferences-desktop-locale-symbolic')
-        this._setOptionSelected(item, code === current)
-        item.connect('activate', () => {
-          this._settings.set_string('language', code)
-          section.label.set_text(`Language: ${label}`)
-          this._updateLanguageOrnaments(section, code)
-        })
-        section.menu.addMenuItem(item)
+        const item = new PopupMenu.PopupMenuItem(label);
+        this._addIconToMenuItem(item, "preferences-desktop-locale-symbolic");
+        this._setOptionSelected(item, code === current);
+        item.connect("activate", () => {
+          this._settings.set_string("language", code);
+          section.label.set_text(`Language: ${label}`);
+          this._updateLanguageOrnaments(section, code);
+        });
+        section.menu.addMenuItem(item);
       }
     }
 
-    _updateLanguageOrnaments (section, selectedCode) {
-      const items = section.menu._getMenuItems()
+    _updateLanguageOrnaments(section, selectedCode) {
+      const items = section.menu._getMenuItems();
       for (const [i, item] of items.entries()) {
         if (item.label && i < LANGUAGES.length)
-          this._setOptionSelected(item, LANGUAGES[i][1] === selectedCode)
+          this._setOptionSelected(item, LANGUAGES[i][1] === selectedCode);
       }
     }
 
-    _buildTranslateGroup (section) {
-      const current = this._settings.get_string('translate-to')
+    _buildTranslateGroup(section) {
+      const current = this._settings.get_string("translate-to");
       for (const [label, value] of TRANSLATE_TARGETS) {
-        const item = new PopupMenu.PopupMenuItem(label)
-        this._addIconToMenuItem(item, 'edit-find-replace-symbolic')
-        this._setOptionSelected(item, value === current)
-        item.connect('activate', () => {
-          this._settings.set_string('translate-to', value)
-          section.label.set_text(`Translate To: ${label}`)
-          const items = section.menu._getMenuItems()
+        const item = new PopupMenu.PopupMenuItem(label);
+        this._addIconToMenuItem(item, "edit-find-replace-symbolic");
+        this._setOptionSelected(item, value === current);
+        item.connect("activate", () => {
+          this._settings.set_string("translate-to", value);
+          section.label.set_text(`Translate To: ${label}`);
+          const items = section.menu._getMenuItems();
           for (const [i, menuItem] of items.entries()) {
             if (menuItem.label && i < TRANSLATE_TARGETS.length)
-              this._setOptionSelected(menuItem, TRANSLATE_TARGETS[i][1] === value)
+              this._setOptionSelected(
+                menuItem,
+                TRANSLATE_TARGETS[i][1] === value,
+              );
           }
-        })
-        section.menu.addMenuItem(item)
+        });
+        section.menu.addMenuItem(item);
       }
     }
 
-    async _exportHistory (format) {
+    async _exportHistory(format) {
       try {
-        const result = await this._client.exportHistory(format)
+        const result = await this._client.exportHistory(format);
         if (!result) {
-          Main.notify(_('Wayvox'), _('No history to export'))
-          return
+          Main.notify(_("Wayvox"), _("No history to export"));
+          return;
         }
-        const ext = format === 'markdown' ? 'md' : format
-        const homePath = GLib.get_home_dir()
-        const filePath = GLib.build_filenamev([homePath, `wayvox-history.${ext}`])
-        const content = format === 'json' ? JSON.stringify(result, null, 2) : result
-        saveToFile(filePath, content)
-        Main.notify(_('Wayvox'), _(`History exported to ~/wayvox-history.${ext}`))
+        const ext = format === "markdown" ? "md" : format;
+        const homePath = GLib.get_home_dir();
+        const filePath = GLib.build_filenamev([
+          homePath,
+          `wayvox-history.${ext}`,
+        ]);
+        const content =
+          format === "json" ? JSON.stringify(result, null, 2) : result;
+        saveToFile(filePath, content);
+        Main.notify(
+          _("Wayvox"),
+          _(`History exported to ~/wayvox-history.${ext}`),
+        );
       } catch (e) {
-        logDebug(`Export failed: ${e.message}`)
-        Main.notify(_('Wayvox'), _(`Export failed: ${e.message}`))
+        logDebug(`Export failed: ${e.message}`);
+        Main.notify(_("Wayvox"), _(`Export failed: ${e.message}`));
       }
     }
 
-    _buildRecallKeyGroup (section) {
-      const current = this._settings.get_string('recall-key')
+    _buildRecallKeyGroup(section) {
+      const current = this._settings.get_string("recall-key");
       for (const key of HOTKEYS) {
-        const label = this._formatHotkey(key)
-        const item = new PopupMenu.PopupMenuItem(label)
-        this._addIconToMenuItem(item, 'input-keyboard-symbolic')
-        this._setOptionSelected(item, key === current)
-        item.connect('activate', () => {
-          this._settings.set_string('recall-key', key)
-          section.label.set_text(`Recall Key: ${label}`)
-          const items = section.menu._getMenuItems()
+        const label = this._formatHotkey(key);
+        const item = new PopupMenu.PopupMenuItem(label);
+        this._addIconToMenuItem(item, "input-keyboard-symbolic");
+        this._setOptionSelected(item, key === current);
+        item.connect("activate", () => {
+          this._settings.set_string("recall-key", key);
+          section.label.set_text(`Recall Key: ${label}`);
+          const items = section.menu._getMenuItems();
           for (const [i, menuItem] of items.entries()) {
             if (menuItem.label)
-              this._setOptionSelected(menuItem, HOTKEYS[i] === key)
+              this._setOptionSelected(menuItem, HOTKEYS[i] === key);
           }
-        })
-        section.menu.addMenuItem(item)
+        });
+        section.menu.addMenuItem(item);
       }
     }
 
-    _buildHotkeyGroup (section) {
-      const current = this._settings.get_string('hotkey')
+    _buildHotkeyGroup(section) {
+      const current = this._settings.get_string("hotkey");
       for (const key of HOTKEYS) {
-        const label = this._formatHotkey(key)
-        const item = new PopupMenu.PopupMenuItem(label)
-        this._addIconToMenuItem(item, 'input-keyboard-symbolic')
-        this._setOptionSelected(item, key === current)
-        item.connect('activate', () => {
-          this._settings.set_string('hotkey', key)
-          section.label.set_text(`Hotkey: ${label}`)
-          this._updateHotkeyOrnaments(section, key)
-        })
-        section.menu.addMenuItem(item)
+        const label = this._formatHotkey(key);
+        const item = new PopupMenu.PopupMenuItem(label);
+        this._addIconToMenuItem(item, "input-keyboard-symbolic");
+        this._setOptionSelected(item, key === current);
+        item.connect("activate", () => {
+          this._settings.set_string("hotkey", key);
+          section.label.set_text(`Hotkey: ${label}`);
+          this._updateHotkeyOrnaments(section, key);
+        });
+        section.menu.addMenuItem(item);
       }
     }
 
-    _updateRadioOrnaments (section, selected) {
-      const items = section.menu._getMenuItems()
+    _updateRadioOrnaments(section, selected) {
+      const items = section.menu._getMenuItems();
       for (const item of items) {
         if (item.label)
-          this._setOptionSelected(item, item.label.get_text() === selected)
+          this._setOptionSelected(item, item.label.get_text() === selected);
       }
     }
 
-    _updateHotkeyOrnaments (section, selectedKey) {
-      const items = section.menu._getMenuItems()
+    _updateHotkeyOrnaments(section, selectedKey) {
+      const items = section.menu._getMenuItems();
       for (const [i, item] of items.entries()) {
         if (item.label)
-          this._setOptionSelected(item, HOTKEYS[i] === selectedKey)
+          this._setOptionSelected(item, HOTKEYS[i] === selectedKey);
       }
     }
 
-    _formatHotkey (key) {
+    _formatHotkey(key) {
       const labels = {
-        KEY_F23: 'Copilot button (F23)',
-        KEY_VOICECOMMAND: 'Voice Command',
-        KEY_ASSISTANT: 'Assistant (AI key)'
-      }
-      if (labels[key]) return labels[key]
-      return key.replace('KEY_', '').replace(/([A-Z])([A-Z]+)/g, (_, first, rest) => {
-        return first + rest.toLowerCase()
-      })
+        KEY_F23: "Copilot button (F23)",
+        KEY_VOICECOMMAND: "Voice Command",
+        KEY_ASSISTANT: "Assistant (AI key)",
+      };
+      if (labels[key]) return labels[key];
+      return key
+        .replace("KEY_", "")
+        .replace(/([A-Z])([A-Z]+)/g, (_, first, rest) => {
+          return first + rest.toLowerCase();
+        });
     }
 
     // -- Server status ------------------------------------------------------
 
-    async _refreshStatus () {
-      this._statusItem.label.set_text(_('Status: Checking...'))
+    async _refreshStatus() {
+      this._statusItem.label.set_text(_("Status: Checking..."));
 
-      const health = await this._client.getHealth()
+      const health = await this._client.getHealth();
       if (health) {
-        this._connected = true
-        this._currentModel = health.model
-        this._statusItem.label.set_text(_(`Status: Connected | Model: ${health.model}`))
+        this._connected = true;
+        this._currentModel = health.model;
+        this._statusItem.label.set_text(
+          _(`Status: Connected | Model: ${health.model}`),
+        );
       } else {
-        this._connected = false
-        this._currentModel = null
-        this._statusItem.label.set_text(_('Status: Disconnected'))
+        this._connected = false;
+        this._currentModel = null;
+        this._statusItem.label.set_text(_("Status: Disconnected"));
       }
 
-      this._populateModelSection()
+      this._populateModelSection();
     }
 
     // -- STT model management -----------------------------------------------
 
-    _populateModelSection () {
-      this._modelSection.menu.removeAll()
+    _populateModelSection() {
+      this._modelSection.menu.removeAll();
 
-      const localModels = listLocalModels()
+      const localModels = listLocalModels();
 
       if (localModels.length === 0) {
-        const noModels = new PopupMenu.PopupMenuItem(_('No models installed'), { reactive: false })
-        this._modelSection.menu.addMenuItem(noModels)
+        const noModels = new PopupMenu.PopupMenuItem(_("No models installed"), {
+          reactive: false,
+        });
+        this._modelSection.menu.addMenuItem(noModels);
       } else {
         for (const model of localModels) {
-          const item = new PopupMenu.PopupMenuItem(model)
+          const item = new PopupMenu.PopupMenuItem(model);
           if (model === this._currentModel) {
-            item.setOrnament(PopupMenu.Ornament.DOT)
+            item.setOrnament(PopupMenu.Ornament.DOT);
           }
-          item.connect('activate', () => this._switchModel(model, item))
-          this._modelSection.menu.addMenuItem(item)
+          item.connect("activate", () => this._switchModel(model, item));
+          this._modelSection.menu.addMenuItem(item);
         }
       }
 
       const available = this._cachedRemoteModels.filter(
-        m => !localModels.includes(m.name)
-      )
+        (m) => !localModels.includes(m.name),
+      );
 
       if (available.length > 0) {
-        this._modelSection.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
+        this._modelSection.menu.addMenuItem(
+          new PopupMenu.PopupSeparatorMenuItem(),
+        );
 
-        const downloadHeader = new PopupMenu.PopupMenuItem(_('Available Downloads'), { reactive: false })
-        downloadHeader.label.add_style_class_name('wayvox-status-label')
-        this._modelSection.menu.addMenuItem(downloadHeader)
+        const downloadHeader = new PopupMenu.PopupMenuItem(
+          _("Available Downloads"),
+          { reactive: false },
+        );
+        downloadHeader.label.add_style_class_name("wayvox-status-label");
+        this._modelSection.menu.addMenuItem(downloadHeader);
 
-        const org = this._settings.get_string('hf-org')
+        const org = this._settings.get_string("hf-org");
         for (const model of available) {
-          const downloads = model.downloads > 1000
-            ? `${(model.downloads / 1000).toFixed(0)}k`
-            : `${model.downloads}`
-          const item = new PopupMenu.PopupMenuItem(`${model.name}  (${downloads} downloads)`)
-          item.connect('activate', () => this._startDownload(org, model.name, item))
-          this._modelSection.menu.addMenuItem(item)
+          const downloads =
+            model.downloads > 1000
+              ? `${(model.downloads / 1000).toFixed(0)}k`
+              : `${model.downloads}`;
+          const item = new PopupMenu.PopupMenuItem(
+            `${model.name}  (${downloads} downloads)`,
+          );
+          item.connect("activate", () =>
+            this._startDownload(org, model.name, item),
+          );
+          this._modelSection.menu.addMenuItem(item);
         }
       }
 
-      this._modelSection.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
+      this._modelSection.menu.addMenuItem(
+        new PopupMenu.PopupSeparatorMenuItem(),
+      );
 
-      const refreshItem = new PopupMenu.PopupMenuItem(_('Refresh List'))
-      refreshItem.connect('activate', () => {
-        refreshItem.label.set_text(_('Refreshing...'))
-        refreshItem.reactive = false
-        this._refreshModelCache()
-      })
-      this._modelSection.menu.addMenuItem(refreshItem)
+      const refreshItem = new PopupMenu.PopupMenuItem(_("Refresh List"));
+      refreshItem.connect("activate", () => {
+        refreshItem.label.set_text(_("Refreshing..."));
+        refreshItem.reactive = false;
+        this._refreshModelCache();
+      });
+      this._modelSection.menu.addMenuItem(refreshItem);
 
-      const activeLabel = this._currentModel || (localModels.length > 0 ? localModels[0] : '')
+      const activeLabel =
+        this._currentModel || (localModels.length > 0 ? localModels[0] : "");
       if (activeLabel) {
-        this._modelSection.label.set_text(_(`STT: ${activeLabel}`))
+        this._modelSection.label.set_text(_(`STT: ${activeLabel}`));
       }
     }
 
-    async _switchModel (modelName, item) {
+    async _switchModel(modelName, item) {
       if (!this._connected) {
-        Main.notify(_('Wayvox'), _('Server is not connected'))
-        return
+        Main.notify(_("Wayvox"), _("Server is not connected"));
+        return;
       }
 
-      const origLabel = item.label.get_text()
-      item.label.set_text(_(`Loading ${modelName}...`))
-      item.reactive = false
-      this._modelSection.label.set_text(_(`Loading ${modelName}...`))
+      const origLabel = item.label.get_text();
+      item.label.set_text(_(`Loading ${modelName}...`));
+      item.reactive = false;
+      this._modelSection.label.set_text(_(`Loading ${modelName}...`));
 
-      logDebug(`Switching to model: ${modelName}`)
-      const result = await this._client.setDefaultModel(modelName)
+      logDebug(`Switching to model: ${modelName}`);
+      const result = await this._client.setDefaultModel(modelName);
 
       if (result) {
-        this._currentModel = modelName
-        Main.notify(_('Wayvox'), _(`Switched to ${modelName}`))
+        this._currentModel = modelName;
+        Main.notify(_("Wayvox"), _(`Switched to ${modelName}`));
       } else {
-        item.label.set_text(origLabel)
-        item.reactive = true
-        Main.notify(_('Wayvox'), _(`Failed to load ${modelName}`))
+        item.label.set_text(origLabel);
+        item.reactive = true;
+        Main.notify(_("Wayvox"), _(`Failed to load ${modelName}`));
       }
-      this._populateModelSection()
+      this._populateModelSection();
     }
 
     // -- STT model download -------------------------------------------------
 
-    async _refreshModelCache () {
-      const org = this._settings.get_string('hf-org')
-      this._cachedRemoteModels = await this._hfClient.searchModels(org) || []
-      this._populateModelSection()
+    async _refreshModelCache() {
+      const org = this._settings.get_string("hf-org");
+      this._cachedRemoteModels = (await this._hfClient.searchModels(org)) || [];
+      this._populateModelSection();
     }
 
-    async _startDownload (org, modelName, item) {
-      item.label.set_text(_(`Downloading ${modelName}...`))
-      item.reactive = false
-      this._modelSection.label.set_text(_(`Downloading ${modelName}...`))
-      logDebug(`Starting download: ${org}/${modelName}`)
+    async _startDownload(org, modelName, item) {
+      item.label.set_text(_(`Downloading ${modelName}...`));
+      item.reactive = false;
+      this._modelSection.label.set_text(_(`Downloading ${modelName}...`));
+      logDebug(`Starting download: ${org}/${modelName}`);
 
       try {
-        await downloadModel(org, modelName)
-        item.label.set_text(_(`Downloaded ${modelName}`))
-        Main.notify(_('Wayvox'), _(`Downloaded ${modelName}`))
+        await downloadModel(org, modelName);
+        item.label.set_text(_(`Downloaded ${modelName}`));
+        Main.notify(_("Wayvox"), _(`Downloaded ${modelName}`));
       } catch (e) {
-        logDebug(`Download failed: ${e.message}`)
-        item.label.set_text(_(`Failed: ${modelName}`))
-        Main.notify(_('Wayvox'), _(`Download failed: ${e.message}`))
+        logDebug(`Download failed: ${e.message}`);
+        item.label.set_text(_(`Failed: ${modelName}`));
+        Main.notify(_("Wayvox"), _(`Download failed: ${e.message}`));
       }
-      this._populateModelSection()
+      this._populateModelSection();
     }
 
     // -- LLM model management -----------------------------------------------
 
-    _populateLlmModelSection () {
-      this._llmModelSection.menu.removeAll()
+    _populateLlmModelSection() {
+      this._llmModelSection.menu.removeAll();
 
-      const localModels = listLocalLlmModels()
+      const localModels = listLocalLlmModels();
 
       if (localModels.length === 0) {
-        const noModels = new PopupMenu.PopupMenuItem(_('No LLM models installed'), { reactive: false })
-        this._llmModelSection.menu.addMenuItem(noModels)
+        const noModels = new PopupMenu.PopupMenuItem(
+          _("No LLM models installed"),
+          { reactive: false },
+        );
+        this._llmModelSection.menu.addMenuItem(noModels);
       } else {
         for (const model of localModels) {
-          const item = new PopupMenu.PopupMenuItem(model)
+          const item = new PopupMenu.PopupMenuItem(model);
           if (model === this._currentLlmModel) {
-            item.setOrnament(PopupMenu.Ornament.DOT)
+            item.setOrnament(PopupMenu.Ornament.DOT);
           }
-          item.connect('activate', () => this._switchLlmModel(model, item))
-          this._llmModelSection.menu.addMenuItem(item)
+          item.connect("activate", () => this._switchLlmModel(model, item));
+          this._llmModelSection.menu.addMenuItem(item);
         }
       }
 
       const available = this._cachedRemoteLlmModels.filter(
-        m => !localModels.includes(m.name)
-      )
+        (m) => !localModels.includes(m.name),
+      );
 
       if (available.length > 0) {
-        this._llmModelSection.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
+        this._llmModelSection.menu.addMenuItem(
+          new PopupMenu.PopupSeparatorMenuItem(),
+        );
 
-        const downloadHeader = new PopupMenu.PopupMenuItem(_('Available Downloads'), { reactive: false })
-        downloadHeader.label.add_style_class_name('wayvox-status-label')
-        this._llmModelSection.menu.addMenuItem(downloadHeader)
+        const downloadHeader = new PopupMenu.PopupMenuItem(
+          _("Available Downloads"),
+          { reactive: false },
+        );
+        downloadHeader.label.add_style_class_name("wayvox-status-label");
+        this._llmModelSection.menu.addMenuItem(downloadHeader);
 
         for (const model of available) {
-          const downloads = model.downloads > 1000
-            ? `${(model.downloads / 1000).toFixed(0)}k`
-            : `${model.downloads}`
-          const item = new PopupMenu.PopupMenuItem(`${model.name}  (${downloads} downloads)`)
-          item.connect('activate', () => this._startLlmDownload(model.name, item))
-          this._llmModelSection.menu.addMenuItem(item)
+          const downloads =
+            model.downloads > 1000
+              ? `${(model.downloads / 1000).toFixed(0)}k`
+              : `${model.downloads}`;
+          const item = new PopupMenu.PopupMenuItem(
+            `${model.name}  (${downloads} downloads)`,
+          );
+          item.connect("activate", () =>
+            this._startLlmDownload(model.name, item),
+          );
+          this._llmModelSection.menu.addMenuItem(item);
         }
       }
 
-      this._llmModelSection.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem())
+      this._llmModelSection.menu.addMenuItem(
+        new PopupMenu.PopupSeparatorMenuItem(),
+      );
 
-      const refreshItem = new PopupMenu.PopupMenuItem(_('Refresh List'))
-      refreshItem.connect('activate', () => {
-        refreshItem.label.set_text(_('Refreshing...'))
-        refreshItem.reactive = false
-        this._refreshLlmCache()
-      })
-      this._llmModelSection.menu.addMenuItem(refreshItem)
+      const refreshItem = new PopupMenu.PopupMenuItem(_("Refresh List"));
+      refreshItem.connect("activate", () => {
+        refreshItem.label.set_text(_("Refreshing..."));
+        refreshItem.reactive = false;
+        this._refreshLlmCache();
+      });
+      this._llmModelSection.menu.addMenuItem(refreshItem);
 
-      const label = this._currentLlmModel ? `LLM: ${this._currentLlmModel}` : 'Language Buddy Models'
-      this._llmModelSection.label.set_text(_(label))
+      const label = this._currentLlmModel
+        ? `LLM: ${this._currentLlmModel}`
+        : "Language Buddy Models";
+      this._llmModelSection.label.set_text(_(label));
     }
 
-    async _refreshLlmCache () {
-      const org = this._settings.get_string('hf-org')
-      this._cachedRemoteLlmModels = await this._hfClient.searchLlmModels(org) || []
-      this._populateLlmModelSection()
+    async _refreshLlmCache() {
+      const org = this._settings.get_string("hf-org");
+      this._cachedRemoteLlmModels =
+        (await this._hfClient.searchLlmModels(org)) || [];
+      this._populateLlmModelSection();
     }
 
-    async _switchLlmModel (modelName, item) {
-      const origLabel = item.label.get_text()
-      item.label.set_text(_(`Loading ${modelName}...`))
-      item.reactive = false
-      this._llmModelSection.label.set_text(_(`Loading ${modelName}...`))
+    async _switchLlmModel(modelName, item) {
+      const origLabel = item.label.get_text();
+      item.label.set_text(_(`Loading ${modelName}...`));
+      item.reactive = false;
+      this._llmModelSection.label.set_text(_(`Loading ${modelName}...`));
 
-      logDebug(`Switching LLM to: ${modelName}`)
-      const result = await this._client.setLlmModel(modelName)
+      logDebug(`Switching LLM to: ${modelName}`);
+      const result = await this._client.setLlmModel(modelName);
 
       if (result) {
-        this._currentLlmModel = modelName
-        Main.notify(_('Wayvox'), _(`LLM: ${modelName}`))
+        this._currentLlmModel = modelName;
+        Main.notify(_("Wayvox"), _(`LLM: ${modelName}`));
       } else {
-        item.label.set_text(origLabel)
-        item.reactive = true
-        Main.notify(_('Wayvox'), _(`Failed to load ${modelName}`))
+        item.label.set_text(origLabel);
+        item.reactive = true;
+        Main.notify(_("Wayvox"), _(`Failed to load ${modelName}`));
       }
-      this._populateLlmModelSection()
+      this._populateLlmModelSection();
     }
 
-    async _startLlmDownload (modelName, item) {
-      logDebug(`Download LLM: ${modelName}`)
-      item.label.set_text(_(`Downloading ${modelName}...`))
-      item.reactive = false
-      this._llmModelSection.label.set_text(_(`Downloading ${modelName}...`))
-      const org = this._settings.get_string('hf-org')
+    async _startLlmDownload(modelName, item) {
+      logDebug(`Download LLM: ${modelName}`);
+      item.label.set_text(_(`Downloading ${modelName}...`));
+      item.reactive = false;
+      this._llmModelSection.label.set_text(_(`Downloading ${modelName}...`));
+      const org = this._settings.get_string("hf-org");
 
       try {
-        await downloadLlmModel(org, modelName)
-        item.label.set_text(_(`Downloaded ${modelName}`))
-        Main.notify(_('Wayvox'), _(`Downloaded ${modelName}`))
+        await downloadLlmModel(org, modelName);
+        item.label.set_text(_(`Downloaded ${modelName}`));
+        Main.notify(_("Wayvox"), _(`Downloaded ${modelName}`));
       } catch (e) {
-        logDebug(`LLM download failed: ${e.message}`)
-        item.label.set_text(_(`Failed: ${modelName}`))
-        Main.notify(_('Wayvox'), _(`Download failed: ${e.message}`))
+        logDebug(`LLM download failed: ${e.message}`);
+        item.label.set_text(_(`Failed: ${modelName}`));
+        Main.notify(_("Wayvox"), _(`Download failed: ${e.message}`));
       }
-      this._populateLlmModelSection()
+      this._populateLlmModelSection();
     }
 
     // -- Apply settings -----------------------------------------------------
 
-    _gatherSettings () {
+    _gatherSettings() {
       return {
-        'server-host': this._settings.get_string('server-host'),
-        'server-port': this._settings.get_int('server-port'),
-        'device': this._settings.get_string('device'),
-        'backend': this._settings.get_string('backend'),
-        'hotkey': this._settings.get_string('hotkey'),
-        'language': this._settings.get_string('language'),
-        'recall-key': this._settings.get_string('recall-key'),
-        'hf-org': this._settings.get_string('hf-org'),
-        'language-buddy-enabled': this._settings.get_boolean('language-buddy-enabled'),
-        'language-buddy-bypass': this._settings.get_boolean('language-buddy-bypass'),
-        'language-buddy-timeout': this._settings.get_int('language-buddy-timeout'),
-        'voice-commands-enabled': this._settings.get_boolean('voice-commands-enabled'),
-        'notifications-enabled': this._settings.get_boolean('notifications-enabled'),
-        'auto-punctuate': this._settings.get_boolean('auto-punctuate'),
-        'audio-feedback-enabled': this._settings.get_boolean('audio-feedback-enabled'),
-        'dictation-formatting-enabled': this._settings.get_boolean('dictation-formatting-enabled'),
-        'vad-threshold': this._settings.get_int('vad-threshold'),
-        'stream-interval': this._settings.get_double('stream-interval'),
-        'translate-to': this._settings.get_string('translate-to'),
-        'mute-other-streams': this._settings.get_boolean('mute-other-streams'),
-        'clipboard-mode': this._settings.get_boolean('clipboard-mode')
-      }
+        "server-host": this._settings.get_string("server-host"),
+        "server-port": this._settings.get_int("server-port"),
+        device: this._settings.get_string("device"),
+        backend: this._settings.get_string("backend"),
+        hotkey: this._settings.get_string("hotkey"),
+        language: this._settings.get_string("language"),
+        "recall-key": this._settings.get_string("recall-key"),
+        "hf-org": this._settings.get_string("hf-org"),
+        "language-buddy-enabled": this._settings.get_boolean(
+          "language-buddy-enabled",
+        ),
+        "language-buddy-bypass": this._settings.get_boolean(
+          "language-buddy-bypass",
+        ),
+        "language-buddy-timeout": this._settings.get_int(
+          "language-buddy-timeout",
+        ),
+        "voice-commands-enabled": this._settings.get_boolean(
+          "voice-commands-enabled",
+        ),
+        "notifications-enabled": this._settings.get_boolean(
+          "notifications-enabled",
+        ),
+        "auto-punctuate": this._settings.get_boolean("auto-punctuate"),
+        "audio-feedback-enabled": this._settings.get_boolean(
+          "audio-feedback-enabled",
+        ),
+        "dictation-formatting-enabled": this._settings.get_boolean(
+          "dictation-formatting-enabled",
+        ),
+        "vad-threshold": this._settings.get_int("vad-threshold"),
+        "stream-interval": this._settings.get_double("stream-interval"),
+        "translate-to": this._settings.get_string("translate-to"),
+        "mute-other-streams": this._settings.get_boolean("mute-other-streams"),
+        "clipboard-mode": this._settings.get_boolean("clipboard-mode"),
+      };
     }
 
-    async _restartServer () {
-      this._restartServerItem.label.set_text(_('Restarting server...'))
-      this._restartServerItem.reactive = false
+    async _restartServer() {
+      this._restartServerItem.label.set_text(_("Restarting server..."));
+      this._restartServerItem.reactive = false;
 
-      const device = this._settings.get_string('device')
+      const device = this._settings.get_string("device");
 
       try {
-        await writeServiceOverride('wayvox-server.service', {
-          WHISPER_DEVICE: device
-        })
-        await restartService('wayvox-server.service')
+        await writeServiceOverride("wayvox-server.service", {
+          WHISPER_DEVICE: device,
+        });
+        await restartService("wayvox-server.service");
 
-        this._restartServerItem.label.set_text(_('Server restarted'))
-        Main.notify(_('Wayvox'), _('Server restarted'))
+        this._restartServerItem.label.set_text(_("Server restarted"));
+        Main.notify(_("Wayvox"), _("Server restarted"));
       } catch (e) {
-        logDebug(`Failed to restart server: ${e.message}`)
-        this._restartServerItem.label.set_text(_('Restart failed'))
-        Main.notify(_('Wayvox'), _(`Failed to restart: ${e.message}`))
+        logDebug(`Failed to restart server: ${e.message}`);
+        this._restartServerItem.label.set_text(_("Restart failed"));
+        Main.notify(_("Wayvox"), _(`Failed to restart: ${e.message}`));
       }
 
-      this._restartServerItem.reactive = true
+      this._restartServerItem.reactive = true;
       GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 3, () => {
-        this._restartServerItem.label.set_text(_('Restart Server'))
-        return GLib.SOURCE_REMOVE
-      })
+        this._restartServerItem.label.set_text(_("Restart Server"));
+        return GLib.SOURCE_REMOVE;
+      });
     }
 
     // -- Cleanup ------------------------------------------------------------
 
-    cleanup () {
+    cleanup() {
       if (this._dbusImpl) {
-        this._dbusImpl.unexport()
-        this._dbusImpl = null
+        this._dbusImpl.unexport();
+        this._dbusImpl = null;
       }
       if (this._overlay) {
-        Main.layoutManager.removeChrome(this._overlay)
-        this._overlay.destroy()
-        this._overlay = null
+        Main.layoutManager.removeChrome(this._overlay);
+        this._overlay.destroy();
+        this._overlay = null;
       }
       if (this._historyOverlay) {
-        Main.layoutManager.removeChrome(this._historyOverlay)
-        this._historyOverlay.destroy()
-        this._historyOverlay = null
+        Main.layoutManager.removeChrome(this._historyOverlay);
+        this._historyOverlay.destroy();
+        this._historyOverlay = null;
       }
       if (this._settingsChangedId) {
-        this._settings.disconnect(this._settingsChangedId)
-        this._settingsChangedId = null
+        this._settings.disconnect(this._settingsChangedId);
+        this._settingsChangedId = null;
       }
       if (this._client) {
-        this._client.destroy()
-        this._client = null
+        this._client.destroy();
+        this._client = null;
       }
       if (this._hfClient) {
-        this._hfClient.destroy()
-        this._hfClient = null
+        this._hfClient.destroy();
+        this._hfClient = null;
       }
-      this._settings = null
+      this._settings = null;
     }
 
-    destroy () {
-      this.cleanup()
-      super.destroy()
+    destroy() {
+      this.cleanup();
+      super.destroy();
     }
-  }
-)
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Extension lifecycle
 // ---------------------------------------------------------------------------
 
 export default class WayvoxExtension extends Extension {
-  enable () {
-    this._settings = this.getSettings()
-    this._indicator = new WayvoxIndicator(this)
-    Main.panel.addToStatusArea('wayvox', this._indicator)
+  enable() {
+    this._settings = this.getSettings();
+    this._indicator = new WayvoxIndicator(this);
+    Main.panel.addToStatusArea("wayvox", this._indicator);
   }
 
-  disable () {
+  disable() {
     if (this._indicator) {
-      this._indicator.cleanup()
-      this._indicator.destroy()
-      this._indicator = null
-      this._settings = null
+      this._indicator.cleanup();
+      this._indicator.destroy();
+      this._indicator = null;
+      this._settings = null;
     }
   }
 }

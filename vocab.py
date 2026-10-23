@@ -33,6 +33,17 @@ import threading
 
 from wayvox_paths import cache_dir, vocabulary_file
 
+try:
+    import openvino_genai as ovg
+except ImportError:
+    ovg = None
+
+_OV_ERROR = None
+if ovg is not None:
+    try:
+        from openvino.exceptions import OVError as _OV_ERROR
+    except ImportError:
+        _OV_ERROR = None
 
 log = logging.getLogger("vocab")
 
@@ -45,113 +56,20 @@ MAX_PATTERN_LEN = 200
 DEFAULT_PREAMBLE = "Technical computer dictation. Terms:"
 
 # Order matters. The prompt keeps the front of this list. Hotwords keep more.
-DEFAULT_TERMS = (
-    "pull request",
-    "merge request",
-    "GitHub",
-    "GitLab",
-    "Bitbucket",
-    "Kubernetes",
-    "kubectl",
-    "Docker",
-    "Dockerfile",
-    "docker compose",
-    "nginx",
-    "PostgreSQL",
-    "JSON",
-    "YAML",
-    "TOML",
-    "regex",
-    "localhost",
-    "OAuth",
-    "pytest",
-    "TypeScript",
-    "JavaScript",
-    "Python",
-    "Rust",
-    "Go",
-    "Node.js",
-    "npm",
-    "pnpm",
-    "pip",
-    "API",
-    "REST",
-    "GraphQL",
-    "gRPC",
-    "SQL",
-    "SQLite",
-    "MySQL",
-    "Redis",
-    "MongoDB",
-    "CI/CD",
-    "OpenVINO",
-    "Whisper",
-    "NPU",
-    "CUDA",
-    "PyTorch",
-    "NumPy",
-    "Hugging Face",
-    "OpenAI",
-    "FastAPI",
-    "Django",
-    "Flask",
-    "React",
-    "Vue",
-    "webhook",
-    "middleware",
-    "gitignore",
-    "cherry-pick",
-    "rebase",
-    "commit",
-    "branch",
-    "sudo",
-    "chmod",
-    "chown",
-    "systemd",
-    "SSH",
-    "UTF-8",
-    "base64",
-    "SHA-256",
-    "stdin",
-    "stdout",
-    "stderr",
-    "Terraform",
-    "Ansible",
-    "Helm",
-    "Minikube",
-    "Podman",
-    "Flatpak",
-    "ConfigMap",
-    "namespace",
-    "ingress",
-    "Elasticsearch",
-    "Kafka",
-    "RabbitMQ",
-    "Prometheus",
-    "Grafana",
-    "Neovim",
-    "VS Code",
-    "Wayland",
-    "PipeWire",
-    "segfault",
-    "stack trace",
-    "breakpoint",
-    "linter",
-    "async",
-    "boolean",
-    "microservice",
-    "repository",
-    "kernel",
-    "filesystem",
-    "endpoint",
-    "CORS",
-    "JWT",
-    "WebSocket",
-    "protobuf",
-    "cron",
-    "cluster",
-    "container",
+_TERM_TEXT = (
+    "pull request|merge request|GitHub|GitLab|Bitbucket|Kubernetes|kubectl|Docker|"
+    "Dockerfile|docker compose|nginx|PostgreSQL|JSON|YAML|TOML|regex|localhost|OAuth|"
+    "pytest|TypeScript|JavaScript|Python|Rust|Go|Node.js|npm|pnpm|pip|API|REST|GraphQL|"
+    "gRPC|SQL|SQLite|MySQL|Redis|MongoDB|CI/CD|OpenVINO|Whisper|NPU|CUDA|PyTorch|NumPy|"
+    "Hugging Face|OpenAI|FastAPI|Django|Flask|React|Vue|webhook|middleware|gitignore|"
+    "cherry-pick|rebase|commit|branch|sudo|chmod|chown|systemd|SSH|UTF-8|base64|SHA-256|"
+    "stdin|stdout|stderr|Terraform|Ansible|Helm|Minikube|Podman|Flatpak|ConfigMap|"
+    "namespace|ingress|Elasticsearch|Kafka|RabbitMQ|Prometheus|Grafana|Neovim|VS Code|"
+    "Wayland|PipeWire|segfault|stack trace|breakpoint|linter|async|boolean|microservice|"
+    "repository|kernel|filesystem|endpoint|CORS|JWT|WebSocket|protobuf|cron|cluster|"
+    "container"
 )
+DEFAULT_TERMS = tuple(_TERM_TEXT.split("|"))
 
 # Patterns are the spoken mishear. Replacements are the spelling we want.
 # Kept specific so ordinary English is left alone.
@@ -232,16 +150,71 @@ _DEFAULT_RULE_PAIRS = (
     (r"\bcherry pick\b", "cherry-pick"),
 )
 
-_lock = threading.Lock()
-_state = {"key": None, "data": None, "rules": None, "errors": ()}
-_logged_errors = set()
-_rejected_bias = set()
-_failover_logged = set()
-_failover_reasons = []
-_backend_device = ""
-_pipeline_mode = ""
-_bias_confirmed = False
-_compiled_word_timestamps = False
+
+class VocabState:
+    """Process-wide vocabulary cache and backend bias."""
+
+    def __init__(self):
+        """Create the lock, vocabulary cache, and backend bias fields."""
+        self.lock = threading.Lock()
+        self.cache = {"key": None, "data": None, "rules": None, "errors": ()}
+        self.logged_errors = set()
+        self.rejected_bias = set()
+        self.failover_logged = set()
+        self.failover_reasons = []
+        self._scalars = {
+            "backend_device": "",
+            "pipeline_mode": "",
+            "bias_confirmed": False,
+            "compiled_word_timestamps": False,
+        }
+
+    @property
+    def backend_device(self):
+        """Whisper device recorded for later bias decisions."""
+        return self._scalars["backend_device"]
+
+    @backend_device.setter
+    def backend_device(self, value):
+        self._scalars["backend_device"] = value
+
+    @property
+    def pipeline_mode(self):
+        """Loaded pipeline mode, or empty before a model is opened."""
+        return self._scalars["pipeline_mode"]
+
+    @pipeline_mode.setter
+    def pipeline_mode(self, value):
+        self._scalars["pipeline_mode"] = value
+
+    @property
+    def bias_confirmed(self):
+        """True after a transcription accepts decoder bias."""
+        return self._scalars["bias_confirmed"]
+
+    @bias_confirmed.setter
+    def bias_confirmed(self, value):
+        self._scalars["bias_confirmed"] = value
+
+    @property
+    def compiled_word_timestamps(self):
+        """True when the pipeline compiled word timestamps."""
+        return self._scalars["compiled_word_timestamps"]
+
+    @compiled_word_timestamps.setter
+    def compiled_word_timestamps(self, value):
+        self._scalars["compiled_word_timestamps"] = value
+
+
+STATE = VocabState()
+
+
+def _call_errors():
+    errors = (TypeError, ValueError, RuntimeError, OSError)
+    if _OV_ERROR is None:
+        return errors
+    return errors + (_OV_ERROR,)
+
 
 _FALSE_ENV = frozenset({"0", "false", "no", "off"})
 
@@ -265,6 +238,7 @@ def whisper_cache_dir():
 
 
 def default_path():
+    """Return the vocabulary path, honoring WHISPER_VOCAB_PATH."""
     override = os.environ.get("WHISPER_VOCAB_PATH")
     if override:
         return override
@@ -273,22 +247,39 @@ def default_path():
 
 def bundled_path():
     """Shipped default vocabulary. make install copies this for a new user."""
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "share", "vocabulary.json")
+    return os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "share",
+        "vocabulary.json",
+    )
+
+
+def _default_replacements():
+    """Build the shipped replacement rules from the default pattern pairs."""
+    rules = []
+    for pattern, repl in _DEFAULT_RULE_PAIRS:
+        rules.append(
+            {
+                "pattern": pattern,
+                "replacement": repl,
+                "ignore_case": True,
+            },
+        )
+    return rules
 
 
 def default_config():
+    """Return the built-in vocabulary used when no file is available."""
     return {
         "enabled": True,
         "preamble": DEFAULT_PREAMBLE,
         "terms": list(DEFAULT_TERMS),
-        "replacements": [
-            {"pattern": pattern, "replacement": repl, "ignore_case": True}
-            for pattern, repl in _DEFAULT_RULE_PAIRS
-        ],
+        "replacements": _default_replacements(),
     }
 
 
 def _dedupe(items):
+    """Handle dedupe."""
     seen = set()
     out = []
     for item in items:
@@ -311,11 +302,13 @@ def normalize(data):
         replacement = str(rule.get("replacement", ""))
         if not pattern:
             continue
-        rules.append({
-            "pattern": pattern,
-            "replacement": replacement,
-            "ignore_case": rule.get("ignore_case") is not False,
-        })
+        rules.append(
+            {
+                "pattern": pattern,
+                "replacement": replacement,
+                "ignore_case": rule.get("ignore_case") is not False,
+            },
+        )
     preamble = str(src.get("preamble") or DEFAULT_PREAMBLE).strip() or DEFAULT_PREAMBLE
     return {
         "enabled": bool(src.get("enabled", True)),
@@ -326,12 +319,15 @@ def normalize(data):
 
 
 def _compile_rules(rules):
+    """Handle compile rules."""
     compiled = []
     errors = []
     for index, rule in enumerate(rules, 1):
         pattern = rule.get("pattern", "")
         if len(pattern) > MAX_PATTERN_LEN:
-            errors.append(f"rule {index}: pattern longer than {MAX_PATTERN_LEN} characters")
+            errors.append(
+                f"rule {index}: pattern longer than {MAX_PATTERN_LEN} characters",
+            )
             continue
         flags = 0 if rule.get("ignore_case") is False else re.IGNORECASE
         try:
@@ -348,14 +344,17 @@ def validate_config(data):
 
 
 def parse_terms(text):
-    return _dedupe(
-        line.strip()
-        for line in str(text).splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    )
+    """Split editor text into unique terms, skipping blanks and comments."""
+    terms = []
+    for line in str(text).splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            terms.append(stripped)
+    return _dedupe(terms)
 
 
 def rules_to_text(rules):
+    """Render replacement rules as lines the editor can display."""
     lines = []
     for rule in rules or []:
         line = f"{rule.get('pattern', '')} => {rule.get('replacement', '')}"
@@ -386,15 +385,18 @@ def parse_rules(text):
         if not pattern:
             errors.append(f"line {lineno}: empty pattern")
             continue
-        rules.append({
-            "pattern": pattern,
-            "replacement": replacement,
-            "ignore_case": ignore_case,
-        })
+        rules.append(
+            {
+                "pattern": pattern,
+                "replacement": replacement,
+                "ignore_case": ignore_case,
+            },
+        )
     return rules, errors
 
 
 def _file_key(path):
+    """Handle file key."""
     try:
         return (path, os.stat(path).st_mtime_ns)
     except OSError:
@@ -402,6 +404,7 @@ def _file_key(path):
 
 
 def _read_file(path):
+    """Handle read file."""
     try:
         with open(path, encoding="utf-8") as handle:
             loaded = json.load(handle)
@@ -410,32 +413,35 @@ def _read_file(path):
     except (OSError, json.JSONDecodeError, UnicodeError) as exc:
         return default_config(), (f"{path}: {exc}. Using built-in vocabulary.",)
     if not isinstance(loaded, dict):
-        return default_config(), (f"{path}: expected a JSON object. Using built-in vocabulary.",)
+        message = f"{path}: expected a JSON object. Using built-in vocabulary."
+        return default_config(), (message,)
     return normalize(loaded), ()
 
 
 def _cached(path):
+    """Handle cached."""
     key = _file_key(path)
-    if _state["key"] == key and _state["data"] is not None:
-        return _state["data"], _state["rules"], _state["errors"]
+    if STATE.cache["key"] == key and STATE.cache["data"] is not None:
+        return STATE.cache["data"], STATE.cache["rules"], STATE.cache["errors"]
     if key[1] is None:
         data, errors = default_config(), ()
     else:
         data, errors = _read_file(path)
     rules, rule_errors = _compile_rules(data["replacements"])
     errors = tuple(errors) + tuple(rule_errors)
-    _state["key"] = key
-    _state["data"] = data
-    _state["rules"] = rules
-    _state["errors"] = errors
+    STATE.cache["key"] = key
+    STATE.cache["data"] = data
+    STATE.cache["rules"] = rules
+    STATE.cache["errors"] = errors
     return data, rules, errors
 
 
 def _log_errors(path, errors):
+    """Handle log errors."""
     token = (path, errors)
-    if not errors or token in _logged_errors:
+    if not errors or token in STATE.logged_errors:
         return
-    _logged_errors.add(token)
+    STATE.logged_errors.add(token)
     for message in errors:
         log.warning("Vocabulary: %s", message)
 
@@ -443,7 +449,7 @@ def _log_errors(path, errors):
 def load(path=None):
     """Return a copy of the active config. Missing file means built-in defaults."""
     path = path or default_path()
-    with _lock:
+    with STATE.lock:
         data, _rules, errors = _cached(path)
         _log_errors(path, errors)
         return copy.deepcopy(data)
@@ -466,9 +472,11 @@ def save(data, path=None):
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(tmp, path)
-    with _lock:
-        if _state["key"] and _state["key"][0] == path:
-            _state["key"] = None
+    with STATE.lock:
+        cached_key = STATE.cache["key"]
+        path_key = tuple(cached_key) if isinstance(cached_key, tuple) else ()
+        if path_key and path_key[0] == path:
+            STATE.cache["key"] = None
 
 
 def install_default(path=None):
@@ -486,7 +494,11 @@ def install_default(path=None):
         with open(source, encoding="utf-8") as handle:
             loaded = json.load(handle)
     except (OSError, json.JSONDecodeError, UnicodeError) as exc:
-        log.warning("Bundled vocabulary %s unusable (%s). Using built-in lists.", source, exc)
+        log.warning(
+            "Bundled vocabulary %s unusable (%s). Using built-in lists.",
+            source,
+            exc,
+        )
     if not isinstance(loaded, dict):
         loaded = default_config()
     save(loaded, path)
@@ -494,6 +506,7 @@ def install_default(path=None):
 
 
 def _join_capped(items, budget):
+    """Handle join capped."""
     if budget <= 0:
         return ""
     parts = []
@@ -526,6 +539,7 @@ def bias(path=None):
 
 
 def _match_case(sample, replacement):
+    """Handle match case."""
     if not sample or not replacement:
         return replacement
     if sample.isupper():
@@ -540,7 +554,7 @@ def apply(text, path=None):
     if not isinstance(text, str) or not text:
         return text
     path = path or default_path()
-    with _lock:
+    with STATE.lock:
         data, rules, errors = _cached(path)
         _log_errors(path, errors)
         if not data.get("enabled", True):
@@ -548,7 +562,10 @@ def apply(text, path=None):
         rules = list(rules)
     for cre, replacement in rules:
         try:
-            text = cre.sub(lambda match, repl=replacement: _match_case(match.group(0), repl), text)
+            text = cre.sub(
+                lambda match, repl=replacement: _match_case(match.group(0), repl),
+                text,
+            )
         except re.error as exc:
             log.warning("Vocabulary rule %s failed: %s", cre.pattern, exc)
     return text
@@ -564,9 +581,8 @@ def configure_backend(device):
     The first transcription tries it. A rejection fails over to regex and
     logs the upgrade that enables decoder bias.
     """
-    global _backend_device
-    _backend_device = str(device or "")
-    if not _backend_device.upper().startswith("NPU"):
+    setattr(STATE, "backend_device", str(device or ""))
+    if not STATE.backend_device.upper().startswith("NPU"):
         return
     wide = npu_prompt_slot_enabled()
     log.info(
@@ -582,9 +598,7 @@ def configure_backend(device):
 
 
 def _installed_genai_version():
-    try:
-        import openvino_genai as ovg
-    except ImportError:
+    if ovg is None:
         return "not installed"
     return getattr(ovg, "__version__", "unknown")
 
@@ -595,10 +609,9 @@ def _option_rejected(exc, name):
     if name not in text:
         return False
     lower = text.lower()
-    return isinstance(exc, TypeError) or any(
-        token in lower
-        for token in ("unexpected", "not supported", "unsupported", "unknown")
-    )
+    tokens = ("unexpected", "not supported", "unsupported", "unknown")
+    matched = any(token in lower for token in tokens)
+    return isinstance(exc, TypeError) or matched
 
 
 _LOAD_OPTIONS = ("word_timestamps", "STATIC_PIPELINE", "CACHE_DIR")
@@ -631,6 +644,7 @@ def _pipeline_kwargs(device):
 
 
 def _rejected_load_option(exc, pending):
+    """Handle rejected load option."""
     for name in _LOAD_OPTIONS:
         if name in pending and _option_rejected(exc, name):
             return name
@@ -647,13 +661,12 @@ def load_whisper_pipeline(factory, model_path, device):
     A binding that rejects one of those options is retried without it.
     Other load errors propagate.
     """
-    global _pipeline_mode, _compiled_word_timestamps
     npu = str(device or "").upper().startswith("NPU")
     kwargs = _pipeline_kwargs(device)
     while True:
         try:
             pipe = factory(str(model_path), **kwargs)
-        except Exception as exc:
+        except _call_errors() as exc:
             dropped = _rejected_load_option(exc, kwargs)
             if not dropped:
                 raise
@@ -666,26 +679,31 @@ def load_whisper_pipeline(factory, model_path, device):
                 _log_cache_failover(exc)
             continue
         break
-    _compiled_word_timestamps = bool(kwargs.get("word_timestamps"))
-    _pipeline_mode = "stateful" if npu and "STATIC_PIPELINE" in kwargs else "default"
+    enabled = bool(kwargs.get("word_timestamps"))
+    setattr(STATE, "compiled_word_timestamps", enabled)
+    mode = "stateful" if npu and "STATIC_PIPELINE" in kwargs else "default"
+    setattr(STATE, "pipeline_mode", mode)
     if npu:
-        if _compiled_word_timestamps:
+        if STATE.compiled_word_timestamps:
             log.info(
                 "NPU Whisper pipeline is stateful and compiled with word_timestamps=True. "
                 "Prompt slot is 447 tokens, so initial_prompt and hotwords are sent. "
                 "OpenVINO GenAI %s. Compiled model cache: %s. "
-                "The first start after enabling this compiles for a few minutes. Later starts reuse the cache. "
-                "Set WHISPER_NPU_WORD_TIMESTAMPS=0 and restart wayvox-server to go back to the 4 token slot.",
+                "The first start after enabling this compiles for a few minutes. "
+                "Later starts reuse the cache. "
+                "Set WHISPER_NPU_WORD_TIMESTAMPS=0 and restart wayvox-server "
+                "to go back to the 4 token slot.",
                 _installed_genai_version(),
                 kwargs.get("CACHE_DIR") or "(disabled)",
             )
         else:
             log.info(
-                "NPU Whisper pipeline is %s. word_timestamps is off, so the prompt slot stays 4 tokens. "
+                "NPU Whisper pipeline is %s. "
+                "word_timestamps is off, so the prompt slot stays 4 tokens. "
                 "A term list fails over to regex. OpenVINO GenAI %s. "
                 "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart wayvox-server. "
                 "make install writes that default.",
-                _pipeline_mode,
+                STATE.pipeline_mode,
                 _installed_genai_version(),
             )
     return pipe
@@ -695,19 +713,25 @@ def _one_line(exc):
     return " ".join(str(exc).split())
 
 
+def _sentence_block(parts):
+    return " ".join(parts) + " "
+
+
 def _log_pipeline_failover(exc):
-    if "static_pipeline" not in _failover_reasons:
-        _failover_reasons.append("static_pipeline")
+    """Handle log pipeline failover."""
+    if "static_pipeline" not in STATE.failover_reasons:
+        STATE.failover_reasons.append("static_pipeline")
     signature = ("pipeline", ("STATIC_PIPELINE",))
-    if signature in _failover_logged:
+    if signature in STATE.failover_logged:
         return
-    _failover_logged.add(signature)
+    STATE.failover_logged.add(signature)
     log.warning(
         "Failover: WhisperPipeline rejected STATIC_PIPELINE (%s). "
         "Loaded the default pipeline instead. "
         "GenAI 2025.4 defaults NPU to a static pipeline that rejects initial_prompt and hotwords. "
-        "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, "
-        "then restart wayvox-server. That release uses the stateful pipeline, which accepts decoder bias. "
+        "Action: upgrade openvino, openvino-genai, and openvino-tokenizers "
+        "to 2026.4.1 or newer, then restart wayvox-server. "
+        "That release uses the stateful pipeline, which accepts decoder bias. "
         "Regex replacements in %s still apply. Installed openvino-genai is %s.",
         _one_line(exc),
         default_path(),
@@ -716,36 +740,48 @@ def _log_pipeline_failover(exc):
 
 
 def _log_named_load_failover(reason, signature, message):
-    if reason not in _failover_reasons:
-        _failover_reasons.append(reason)
-    if signature in _failover_logged:
+    """Handle log named load failover."""
+    if reason not in STATE.failover_reasons:
+        STATE.failover_reasons.append(reason)
+    if signature in STATE.failover_logged:
         return
-    _failover_logged.add(signature)
+    STATE.failover_logged.add(signature)
     log.warning(message)
 
 
 def _log_word_timestamps_failover(exc):
+    detail = _one_line(exc)
+    path = default_path()
+    version = _installed_genai_version()
+    message = (
+        f"Failover: WhisperPipeline rejected word_timestamps ({detail}). "
+        "The NPU prompt slot stays 4 tokens, so a term list will not fit. "
+        "Action: upgrade openvino, openvino-genai, and openvino-tokenizers "
+        "to 2026.4.1 or newer, then restart wayvox-server. "
+        "Set WHISPER_NPU_WORD_TIMESTAMPS=0 to skip this compile option. "
+        f"Regex replacements in {path} still apply. "
+        f"Installed openvino-genai is {version}."
+    )
     _log_named_load_failover(
         "word_timestamps",
         ("pipeline", ("word_timestamps",)),
-        "Failover: WhisperPipeline rejected word_timestamps (%s). "
-        "The NPU prompt slot stays 4 tokens, so a term list will not fit. "
-        "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, "
-        "then restart wayvox-server. Set WHISPER_NPU_WORD_TIMESTAMPS=0 to skip this compile option. "
-        "Regex replacements in %s still apply. Installed openvino-genai is %s."
-        % (_one_line(exc), default_path(), _installed_genai_version()),
+        message,
     )
 
 
 def _log_cache_failover(exc):
+    detail = _one_line(exc)
+    version = _installed_genai_version()
+    message = (
+        f"Failover: WhisperPipeline rejected CACHE_DIR ({detail}). "
+        "Loaded without a compiled-model cache, so the next start compiles again. "
+        "Action: unset WHISPER_CACHE_DIR or point it at a writable directory, "
+        f"then restart wayvox-server. Installed openvino-genai is {version}."
+    )
     _log_named_load_failover(
         "cache_dir",
         ("pipeline", ("CACHE_DIR",)),
-        "Failover: WhisperPipeline rejected CACHE_DIR (%s). "
-        "Loaded without a compiled-model cache, so the next start compiles again. "
-        "Action: unset WHISPER_CACHE_DIR or point it at a writable directory, then restart wayvox-server. "
-        "Installed openvino-genai is %s."
-        % (_one_line(exc), _installed_genai_version()),
+        message,
     )
 
 
@@ -757,12 +793,9 @@ def _failure_reason(exc, attempt):
     if not present:
         return None, []
     named = [key for key in present if key in text]
-    unsupported = (
-        isinstance(exc, TypeError)
-        or "not supported" in lower
-        or "unexpected" in lower
-        or "has_value" in lower
-    )
+    markers = ("not supported", "unexpected", "has_value")
+    text_match = any(marker in lower for marker in markers)
+    unsupported = isinstance(exc, TypeError) or text_match
     if named and unsupported:
         # The static NPU pipeline rejects every bias argument the same way.
         # Drop them together so the retry does not spend another inference.
@@ -778,38 +811,46 @@ def _failure_reason(exc, attempt):
 
 
 def _log_failover(reason, dropped, exc):
-    if reason and reason not in _failover_reasons:
-        _failover_reasons.append(reason)
+    """Handle log failover."""
+    if reason and reason not in STATE.failover_reasons:
+        STATE.failover_reasons.append(reason)
     signature = (reason, tuple(dropped))
-    if signature in _failover_logged:
+    if signature in STATE.failover_logged:
         return
-    _failover_logged.add(signature)
+    STATE.failover_logged.add(signature)
     keys = " and ".join(dropped)
     version = _installed_genai_version()
     path = default_path()
-    npu = "npu" in str(exc).lower() or _backend_device.upper().startswith("NPU")
+    npu = "npu" in str(exc).lower() or STATE.backend_device.upper().startswith("NPU")
     if reason == "prompt_slot":
-        if _compiled_word_timestamps:
-            action = (
-                "word_timestamps=True was compiled and the slot is still 4 tokens. "
-                "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
-                "Set WHISPER_DEVICE=GPU and restart wayvox-server to send the full term list. "
-                "This OpenVINO build did not raise whisper_max_prompt_size. "
+        if STATE.compiled_word_timestamps:
+            action = _sentence_block(
+                [
+                    "word_timestamps=True was compiled and the slot is still 4 tokens.",
+                    "Action: do not set MAX_PROMPT_LEN. The NPU encoder rejects that name.",
+                    "Set WHISPER_DEVICE=GPU and restart wayvox-server to send the full term list.",
+                    "This OpenVINO build did not raise whisper_max_prompt_size.",
+                ],
             )
         else:
-            action = (
-                "word_timestamps was not compiled, so the slot stayed 4 tokens. "
-                "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart wayvox-server. "
-                "make install writes that into the user service. "
-                "The flag passes word_timestamps=True to the WhisperPipeline constructor and compiles a 447 token slot. "
-                "Do not set MAX_PROMPT_LEN. The NPU encoder rejects that name. "
+            action = _sentence_block(
+                [
+                    "word_timestamps was not compiled, so the slot stayed 4 tokens.",
+                    "Action: set WHISPER_NPU_WORD_TIMESTAMPS=1 and restart wayvox-server.",
+                    "make install writes that into the user service.",
+                    "The flag passes word_timestamps=True to the WhisperPipeline constructor",
+                    "and compiles a 447 token slot.",
+                    "Do not set MAX_PROMPT_LEN. The NPU encoder rejects that name.",
+                ],
             )
         log.warning(
             "Failover: NPU Whisper prompt slot is 4 tokens, shorter than %s. "
-            "Error: %s. Dropped %s for the rest of this process so the next utterance skips the failed inference. "
+            "Error: %s. Dropped %s for the rest of this process so the next "
+            "utterance skips the failed inference. "
             "Regex replacements in %s still correct misheard terms. "
             "%s"
-            "Installed openvino-genai is %s. Until then, add a replacement rule for any term the model still mishears.",
+            "Installed openvino-genai is %s. Until then, add a replacement rule "
+            "for any term the model still mishears.",
             keys,
             _one_line(exc),
             keys,
@@ -823,11 +864,13 @@ def _log_failover(reason, dropped, exc):
             "Failover: this OpenVINO build rejected %s (%s). "
             "Transcription continues without decoder bias. "
             "Regex replacements in %s still correct misheard terms. "
-            "Action: upgrade openvino, openvino-genai, and openvino-tokenizers to 2026.4.1 or newer, then restart wayvox-server. "
+            "Action: upgrade openvino, openvino-genai, and openvino-tokenizers "
+            "to 2026.4.1 or newer, then restart wayvox-server. "
             "GenAI 2025.4 uses a static NPU pipeline that rejects initial_prompt and hotwords. "
             "GenAI 2026.4 accepts those arguments. "
             "Installed openvino-genai is %s. "
-            "If a later log says the prompt slot is 4 tokens, a full term list still cannot be sent and regex remains the fix.",
+            "If a later log says the prompt slot is 4 tokens, a full term list "
+            "still cannot be sent and regex remains the fix.",
             keys,
             _one_line(exc),
             path,
@@ -860,57 +903,57 @@ def generate_biased(fn, *args, **kwargs):
     prompt = bias()
     attempt = dict(kwargs)
     for key in _BIAS_KEYS:
-        if key in _rejected_bias:
+        if key in STATE.rejected_bias:
             continue
         value = prompt.get(key)
         if value:
             attempt[key] = value
 
-    global _bias_confirmed
     while True:
         try:
             result = fn(*args, **attempt)
-        except Exception as exc:
+        except _call_errors() as exc:
             reason, dropped = _failure_reason(exc, attempt)
             if not dropped:
                 raise
             for key in dropped:
                 attempt.pop(key, None)
-                _rejected_bias.add(key)
+                STATE.rejected_bias.add(key)
             _log_failover(reason, dropped, exc)
             continue
         if any(key in attempt for key in _BIAS_KEYS):
-            _bias_confirmed = True
+            setattr(STATE, "bias_confirmed", True)
         return result
 
 
 def bias_status():
     """Runtime bias state for /health and startup logs."""
-    rejected = sorted(_rejected_bias)
-    active = [key for key in _BIAS_KEYS if key not in _rejected_bias]
+    rejected = sorted(STATE.rejected_bias)
+    active = [key for key in _BIAS_KEYS if key not in STATE.rejected_bias]
     if rejected and not active:
         mode = "regex"
     elif rejected:
         mode = "partial"
-    elif _bias_confirmed or not _backend_device.upper().startswith("NPU"):
+    elif STATE.bias_confirmed or not STATE.backend_device.upper().startswith("NPU"):
         mode = "on"
     else:
         mode = "pending"
-    npu = _backend_device.upper().startswith("NPU")
+    npu = STATE.backend_device.upper().startswith("NPU")
     return {
         "mode": mode,
         "active": active,
         "rejected": rejected,
-        "pipeline": _pipeline_mode or "unloaded",
-        "device": _backend_device,
-        "failover": list(_failover_reasons),
-        "word_timestamps": _compiled_word_timestamps,
+        "pipeline": STATE.pipeline_mode or "unloaded",
+        "device": STATE.backend_device,
+        "failover": list(STATE.failover_reasons),
+        "word_timestamps": STATE.compiled_word_timestamps,
         "word_timestamps_requested": bool(npu and npu_prompt_slot_enabled()),
         "cache_dir": whisper_cache_dir() or "",
     }
 
 
 def describe(path=None):
+    """Summarize the active vocabulary file and decoder-bias state."""
     path = path or default_path()
     data = load(path)
     prompts = bias(path)

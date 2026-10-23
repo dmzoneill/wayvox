@@ -1,467 +1,600 @@
-import Gio from 'gi://Gio'
-import GLib from 'gi://GLib'
-import Soup from 'gi://Soup'
+import Gio from "gi://Gio";
+import GLib from "gi://GLib";
+import Soup from "gi://Soup";
 
-Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async')
+Gio._promisify(Gio.Subprocess.prototype, "communicate_utf8_async");
 
-const LOG_PREFIX = '[wayvox]'
+const LOG_PREFIX = "[wayvox]";
 
 // Detect ydotool socket at call time — daemon version and distro affect the path.
 // Priority: YDOTOOL_SOCKET env var → /run/user/<uid>/.ydotool_socket → /tmp/.ydotool_socket
-function getYdotoolSocket () {
-  const envSocket = GLib.getenv('YDOTOOL_SOCKET')
-  if (envSocket) return envSocket
+function getYdotoolSocket() {
+  const envSocket = GLib.getenv("YDOTOOL_SOCKET");
+  if (envSocket) return envSocket;
 
-  const runtimeSocket = GLib.build_filenamev([GLib.get_user_runtime_dir(), '.ydotool_socket'])
-  if (GLib.file_test(runtimeSocket, GLib.FileTest.EXISTS)) return runtimeSocket
+  const runtimeSocket = GLib.build_filenamev([
+    GLib.get_user_runtime_dir(),
+    ".ydotool_socket",
+  ]);
+  if (GLib.file_test(runtimeSocket, GLib.FileTest.EXISTS)) return runtimeSocket;
 
-  return '/tmp/.ydotool_socket'
+  return "/tmp/.ydotool_socket";
 }
 
-export function logDebug (message) {
-  console.log(`${LOG_PREFIX} ${message}`) // eslint-disable-line no-undef
+export function logDebug(message) {
+  console.log(`${LOG_PREFIX} ${message}`);
 }
 
-export async function execCommand (argv, input = null, cancellable = null) {
-  let cancelId = 0
-  let flags = Gio.SubprocessFlags.STDOUT_PIPE |
-              Gio.SubprocessFlags.STDERR_PIPE
+export async function execCommand(argv, input = null, cancellable = null) {
+  let cancelId = 0;
+  let flags = Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE;
 
-  if (input !== null) { flags |= Gio.SubprocessFlags.STDIN_PIPE }
+  if (input !== null) {
+    flags |= Gio.SubprocessFlags.STDIN_PIPE;
+  }
 
-  const proc = new Gio.Subprocess({ argv, flags })
-  proc.init(cancellable)
+  const proc = new Gio.Subprocess({ argv, flags });
+  proc.init(cancellable);
 
   if (cancellable instanceof Gio.Cancellable) {
-    cancelId = cancellable.connect(() => proc.force_exit())
+    cancelId = cancellable.connect(() => proc.force_exit());
   }
 
   try {
-    const [stdout, stderr] = await proc.communicate_utf8_async(input, null)
-    const status = proc.get_exit_status()
+    const [stdout, stderr] = await proc.communicate_utf8_async(input, null);
+    const status = proc.get_exit_status();
 
     if (status !== 0) {
-      throw new Error(stderr ? stderr.trim() : `Command '${argv}' failed with exit code ${status}`)
+      throw new Error(
+        stderr
+          ? stderr.trim()
+          : `Command '${argv}' failed with exit code ${status}`,
+      );
     }
 
-    return stdout ? stdout.trim() : ''
+    return stdout ? stdout.trim() : "";
   } finally {
-    if (cancelId > 0) { cancellable.disconnect(cancelId) }
+    if (cancelId > 0) {
+      cancellable.disconnect(cancelId);
+    }
   }
 }
 
 export class WhisperClient {
-  constructor (host, port) {
-    this._session = new Soup.Session()
-    this._host = host
-    this._port = port
+  constructor(host, port) {
+    this._session = new Soup.Session();
+    this._host = host;
+    this._port = port;
   }
 
-  _uri (path) {
-    return GLib.Uri.parse(`http://${this._host}:${this._port}${path}`, GLib.UriFlags.NONE)
+  _uri(path) {
+    return GLib.Uri.parse(
+      `http://${this._host}:${this._port}${path}`,
+      GLib.UriFlags.NONE,
+    );
   }
 
-  async _request (method, path, body = null) {
-    const message = new Soup.Message({ method, uri: this._uri(path) })
+  async _request(method, path, body = null) {
+    const message = new Soup.Message({ method, uri: this._uri(path) });
 
     if (body) {
-      const bytes = new GLib.Bytes(JSON.stringify(body))
-      message.set_request_body_from_bytes('application/json', bytes)
+      const bytes = new GLib.Bytes(JSON.stringify(body));
+      message.set_request_body_from_bytes("application/json", bytes);
     }
 
     try {
-      const bytes = await this._sendAsync(message)
+      const bytes = await this._sendAsync(message);
       if (message.get_status() !== Soup.Status.OK) {
-        throw new Error(`HTTP ${message.get_status()}`)
+        throw new Error(`HTTP ${message.get_status()}`);
       }
-      const text = new TextDecoder().decode(bytes.get_data())
-      return JSON.parse(text)
+      const text = new TextDecoder().decode(bytes.get_data());
+      return JSON.parse(text);
     } catch (e) {
-      logDebug(`Request failed: ${method} ${path}: ${e.message}`)
-      return null
+      logDebug(`Request failed: ${method} ${path}: ${e.message}`);
+      return null;
     }
   }
 
-  _sendAsync (message) {
+  _sendAsync(message) {
     return new Promise((resolve, reject) => {
       this._session.send_and_read_async(
-        message, GLib.PRIORITY_DEFAULT, null,
+        message,
+        GLib.PRIORITY_DEFAULT,
+        null,
         (session, result) => {
           try {
-            resolve(session.send_and_read_finish(result))
+            resolve(session.send_and_read_finish(result));
           } catch (e) {
-            reject(e)
+            reject(e);
           }
-        }
-      )
-    })
+        },
+      );
+    });
   }
 
-  async getHealth () {
-    return this._request('GET', '/health')
+  async getHealth() {
+    return this._request("GET", "/health");
   }
 
-  async getModels () {
-    return this._request('GET', '/models')
+  async getModels() {
+    return this._request("GET", "/models");
   }
 
-  async setDefaultModel (modelName) {
-    return this._request('PUT', '/model/default', { model: modelName })
+  async setDefaultModel(modelName) {
+    return this._request("PUT", "/model/default", { model: modelName });
   }
 
-  async rewrite (text, tones) {
-    return this._request('POST', '/rewrite', { text, tones })
+  async rewrite(text, tones) {
+    return this._request("POST", "/rewrite", { text, tones });
   }
 
-  async getLlmModels () {
-    return this._request('GET', '/llm/models')
+  async getLlmModels() {
+    return this._request("GET", "/llm/models");
   }
 
-  async setLlmModel (modelName) {
-    return this._request('PUT', '/llm/model', { model: modelName })
+  async setLlmModel(modelName) {
+    return this._request("PUT", "/llm/model", { model: modelName });
   }
 
-  async getMetrics () {
-    return this._request('GET', '/metrics')
+  async getMetrics() {
+    return this._request("GET", "/metrics");
   }
 
-  async exportHistory (format = 'json', limit = 50) {
+  async exportHistory(format = "json", limit = 50) {
     const message = new Soup.Message({
-      method: 'GET',
-      uri: this._uri(`/history/export?format=${format}&limit=${limit}`)
-    })
+      method: "GET",
+      uri: this._uri(`/history/export?format=${format}&limit=${limit}`),
+    });
     try {
-      const bytes = await this._sendAsync(message)
-      if (message.get_status() !== Soup.Status.OK) return null
-      const text = new TextDecoder().decode(bytes.get_data())
-      return format === 'json' ? JSON.parse(text) : text
+      const bytes = await this._sendAsync(message);
+      if (message.get_status() !== Soup.Status.OK) return null;
+      const text = new TextDecoder().decode(bytes.get_data());
+      return format === "json" ? JSON.parse(text) : text;
     } catch (e) {
-      logDebug(`Export history failed: ${e.message}`)
-      return null
+      logDebug(`Export history failed: ${e.message}`);
+      return null;
     }
   }
 
-  destroy () {
-    this._session = null
+  destroy() {
+    this._session = null;
   }
 }
 
 export class HuggingFaceClient {
-  constructor () {
-    this._session = new Soup.Session()
+  constructor() {
+    this._session = new Soup.Session();
   }
 
-  async searchModels (org, query = 'whisper') {
-    const url = `https://huggingface.co/api/models?author=${org}&search=${query}&sort=downloads&direction=-1&limit=50`
+  async searchModels(org, query = "whisper") {
+    const url = `https://huggingface.co/api/models?author=${org}&search=${query}&sort=downloads&direction=-1&limit=50`;
     const message = new Soup.Message({
-      method: 'GET',
-      uri: GLib.Uri.parse(url, GLib.UriFlags.NONE)
-    })
+      method: "GET",
+      uri: GLib.Uri.parse(url, GLib.UriFlags.NONE),
+    });
 
     try {
-      const bytes = await this._sendAsync(message)
+      const bytes = await this._sendAsync(message);
       if (message.get_status() !== Soup.Status.OK) {
-        throw new Error(`HuggingFace API returned ${message.get_status()}`)
+        throw new Error(`HuggingFace API returned ${message.get_status()}`);
       }
-      const text = new TextDecoder().decode(bytes.get_data())
-      const models = JSON.parse(text)
+      const text = new TextDecoder().decode(bytes.get_data());
+      const models = JSON.parse(text);
       return models
-        .filter(m => m.id.toLowerCase().includes('whisper'))
-        .map(m => ({
+        .filter((m) => m.id.toLowerCase().includes("whisper"))
+        .map((m) => ({
           id: m.id,
-          name: m.id.split('/').pop(),
+          name: m.id.split("/").pop(),
           downloads: m.downloads || 0,
-          lastModified: m.lastModified || ''
-        }))
+          lastModified: m.lastModified || "",
+        }));
     } catch (e) {
-      logDebug(`HuggingFace search failed: ${e.message}`)
-      return []
+      logDebug(`HuggingFace search failed: ${e.message}`);
+      return [];
     }
   }
 
-  async searchLlmModels (org) {
-    const url = `https://huggingface.co/api/models?author=${org}&search=int4-ov&sort=downloads&direction=-1&limit=50`
+  async searchLlmModels(org) {
+    const url = `https://huggingface.co/api/models?author=${org}&search=int4-ov&sort=downloads&direction=-1&limit=50`;
     const message = new Soup.Message({
-      method: 'GET',
-      uri: GLib.Uri.parse(url, GLib.UriFlags.NONE)
-    })
+      method: "GET",
+      uri: GLib.Uri.parse(url, GLib.UriFlags.NONE),
+    });
 
     try {
-      const bytes = await this._sendAsync(message)
+      const bytes = await this._sendAsync(message);
       if (message.get_status() !== Soup.Status.OK) {
-        throw new Error(`HuggingFace API returned ${message.get_status()}`)
+        throw new Error(`HuggingFace API returned ${message.get_status()}`);
       }
-      const text = new TextDecoder().decode(bytes.get_data())
-      const models = JSON.parse(text)
+      const text = new TextDecoder().decode(bytes.get_data());
+      const models = JSON.parse(text);
       return models
-        .filter(m => m.id.toLowerCase().includes('int4-ov'))
-        .map(m => ({
+        .filter((m) => m.id.toLowerCase().includes("int4-ov"))
+        .map((m) => ({
           id: m.id,
-          name: m.id.split('/').pop(),
-          downloads: m.downloads || 0
-        }))
+          name: m.id.split("/").pop(),
+          downloads: m.downloads || 0,
+        }));
     } catch (e) {
-      logDebug(`HuggingFace LLM search failed: ${e.message}`)
-      return []
+      logDebug(`HuggingFace LLM search failed: ${e.message}`);
+      return [];
     }
   }
 
-  _sendAsync (message) {
+  _sendAsync(message) {
     return new Promise((resolve, reject) => {
       this._session.send_and_read_async(
-        message, GLib.PRIORITY_DEFAULT, null,
+        message,
+        GLib.PRIORITY_DEFAULT,
+        null,
         (session, result) => {
           try {
-            resolve(session.send_and_read_finish(result))
+            resolve(session.send_and_read_finish(result));
           } catch (e) {
-            reject(e)
+            reject(e);
           }
-        }
-      )
-    })
+        },
+      );
+    });
   }
 
-  destroy () {
-    this._session = null
+  destroy() {
+    this._session = null;
   }
 }
 
-export function getModelsDir () {
-  return GLib.build_filenamev([GLib.get_home_dir(), '.whisper', 'models'])
+export function getModelsDir() {
+  return GLib.build_filenamev([GLib.get_home_dir(), ".whisper", "models"]);
 }
 
-export function listLocalModels () {
-  const modelsDir = getModelsDir()
-  const dir = Gio.file_new_for_path(modelsDir)
+export function listLocalModels() {
+  const modelsDir = getModelsDir();
+  const dir = Gio.file_new_for_path(modelsDir);
 
-  let enumerator
+  let enumerator;
   try {
-    enumerator = dir.enumerate_children('standard::*', 0, null)
+    enumerator = dir.enumerate_children("standard::*", 0, null);
   } catch (e) {
-    logDebug(`Failed to read models directory: ${e.message}`)
-    return []
+    logDebug(`Failed to read models directory: ${e.message}`);
+    return [];
   }
 
-  const models = []
-  let entry
+  const models = [];
+  let entry;
   while ((entry = enumerator.next_file(null))) {
-    const name = entry.get_name()
-    if (!name.startsWith('.') && entry.get_file_type() === Gio.FileType.DIRECTORY) {
-      models.push(name)
+    const name = entry.get_name();
+    if (
+      !name.startsWith(".") &&
+      entry.get_file_type() === Gio.FileType.DIRECTORY
+    ) {
+      models.push(name);
     }
   }
 
-  return models.sort()
+  return models.sort();
 }
 
-export async function downloadModel (org, modelName, cancellable = null) {
-  const dest = GLib.build_filenamev([getModelsDir(), modelName])
+export async function downloadModel(org, modelName, cancellable = null) {
+  const dest = GLib.build_filenamev([getModelsDir(), modelName]);
 
-  if (GLib.file_test(dest, GLib.FileTest.IS_DIR)) {
-    throw new Error(`Model ${modelName} already exists`)
+  const modelReady = GLib.file_test(
+    dest,
+    GLib.FileTest.IS_DIR,
+  );
+  if (modelReady) {
+    throw new Error(`Model ${modelName} already exists`);
   }
 
-  const url = `https://huggingface.co/${org}/${modelName}`
-  await execCommand(['git', 'clone', url, dest], null, cancellable)
-  await execCommand(['git', '-C', dest, 'lfs', 'pull'], null, cancellable)
+  const url = `https://huggingface.co/${org}/${modelName}`;
+  await execCommand(["git", "clone", url, dest], null, cancellable);
+  await execCommand(["git", "-C", dest, "lfs", "pull"], null, cancellable);
 }
 
-export function getLlmModelsDir () {
-  return GLib.build_filenamev([GLib.get_home_dir(), '.whisper', 'llm-models'])
+export function getLlmModelsDir() {
+  return GLib.build_filenamev([GLib.get_home_dir(), ".whisper", "llm-models"]);
 }
 
-export function listLocalLlmModels () {
-  const modelsDir = getLlmModelsDir()
-  const dir = Gio.file_new_for_path(modelsDir)
+export function listLocalLlmModels() {
+  const modelsDir = getLlmModelsDir();
+  const dir = Gio.file_new_for_path(modelsDir);
 
-  let enumerator
+  let enumerator;
   try {
-    enumerator = dir.enumerate_children('standard::*', 0, null)
-  } catch (e) {
-    return []
+    enumerator = dir.enumerate_children("standard::*", 0, null);
+  } catch {
+    return [];
   }
 
-  const models = []
-  let entry
+  const models = [];
+  let entry;
   while ((entry = enumerator.next_file(null))) {
-    const name = entry.get_name()
-    if (!name.startsWith('.') && entry.get_file_type() === Gio.FileType.DIRECTORY) {
-      models.push(name)
+    const name = entry.get_name();
+    if (
+      !name.startsWith(".") &&
+      entry.get_file_type() === Gio.FileType.DIRECTORY
+    ) {
+      models.push(name);
     }
   }
 
-  return models.sort()
+  return models.sort();
 }
 
-export async function downloadLlmModel (org, modelName, cancellable = null) {
-  const dest = GLib.build_filenamev([getLlmModelsDir(), modelName])
+export async function downloadLlmModel(org, modelName, cancellable = null) {
+  const dest = GLib.build_filenamev([getLlmModelsDir(), modelName]);
 
-  if (GLib.file_test(dest, GLib.FileTest.IS_DIR)) {
-    throw new Error(`LLM model ${modelName} already exists`)
+  const modelReady = GLib.file_test(
+    dest,
+    GLib.FileTest.IS_DIR,
+  );
+  if (modelReady) {
+    throw new Error(`LLM model ${modelName} already exists`);
   }
 
-  const parentDir = Gio.file_new_for_path(getLlmModelsDir())
+  const parentDir = Gio.file_new_for_path(getLlmModelsDir());
   try {
-    parentDir.make_directory_with_parents(null)
+    parentDir.make_directory_with_parents(null);
   } catch (e) {
-    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) { throw e }
+    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) {
+      throw e;
+    }
   }
 
-  const url = `https://huggingface.co/${org}/${modelName}`
-  await execCommand(['git', 'clone', url, dest], null, cancellable)
-  await execCommand(['git', '-C', dest, 'lfs', 'pull'], null, cancellable)
+  const url = `https://huggingface.co/${org}/${modelName}`;
+  await execCommand(["git", "clone", url, dest], null, cancellable);
+  await execCommand(["git", "-C", dest, "lfs", "pull"], null, cancellable);
 }
 
-export async function typeText (text, delayMs = 4) {
-  return execCommand(['env', `YDOTOOL_SOCKET=${getYdotoolSocket()}`, 'ydotool', 'type', '-d', String(delayMs), '--', text])
+export async function typeText(text, delayMs = 4) {
+  return execCommand([
+    "env",
+    `YDOTOOL_SOCKET=${getYdotoolSocket()}`,
+    "ydotool",
+    "type",
+    "-d",
+    String(delayMs),
+    "--",
+    text,
+  ]);
 }
 
-export async function backspaceN (n) {
-  const socket = getYdotoolSocket()
-  const promises = []
+export async function backspaceN(n) {
+  const socket = getYdotoolSocket();
+  const promises = [];
   for (let i = 0; i < n; i++) {
-    promises.push(execCommand(['env', `YDOTOOL_SOCKET=${socket}`, 'ydotool', 'key', '14:1', '14:0']))
+    promises.push(
+      execCommand([
+        "env",
+        `YDOTOOL_SOCKET=${socket}`,
+        "ydotool",
+        "key",
+        "14:1",
+        "14:0",
+      ]),
+    );
   }
-  return Promise.all(promises)
+  return Promise.all(promises);
 }
 
-export function saveToFile (filePath, content) {
-  const file = Gio.file_new_for_path(filePath)
-  file.replace_contents(content, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null)
+export function saveToFile(filePath, content) {
+  const file = Gio.file_new_for_path(filePath);
+  file.replace_contents(
+    content,
+    null,
+    false,
+    Gio.FileCreateFlags.REPLACE_DESTINATION,
+    null,
+  );
 }
 
-export async function restartService (serviceName) {
-  return execCommand(['systemctl', '--user', 'restart', serviceName])
+export async function restartService(serviceName) {
+  return execCommand(["systemctl", "--user", "restart", serviceName]);
 }
 
-export async function writePttServiceOverride (envVars, pttArgs) {
+export async function writePttServiceOverride(envVars, pttArgs) {
   const overrideDir = GLib.build_filenamev([
-    GLib.get_home_dir(), '.config', 'systemd', 'user',
-    'wayvox-push-to-talk.service.d'
-  ])
-  const overridePath = GLib.build_filenamev([overrideDir, 'override.conf'])
+    GLib.get_home_dir(),
+    ".config",
+    "systemd",
+    "user",
+    "wayvox-push-to-talk.service.d",
+  ]);
+  const overridePath = GLib.build_filenamev([overrideDir, "override.conf"]);
 
-  const dir = Gio.file_new_for_path(overrideDir)
+  const dir = Gio.file_new_for_path(overrideDir);
   try {
-    dir.make_directory_with_parents(null)
+    dir.make_directory_with_parents(null);
   } catch (e) {
-    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) { throw e }
-  }
-
-  let content = '[Service]\n'
-  for (const [key, value] of Object.entries(envVars)) {
-    content += `Environment="${key}=${value}"\n`
-  }
-
-  let srcDir = GLib.build_filenamev([GLib.get_home_dir(), 'src', 'usr', 'wayvox'])
-  if (!GLib.file_test(srcDir, GLib.FileTest.IS_DIR))
-    srcDir = GLib.build_filenamev([GLib.get_home_dir(), 'src', 'usr', 'whisper-npu-server'])
-  const argsStr = pttArgs.map(a => `"${a}"`).join(' ')
-  content += `ExecStart=\n`
-  content += `ExecStart=/usr/bin/python3 ${srcDir}/push-to-talk.py ${argsStr}\n`
-
-  const file = Gio.file_new_for_path(overridePath)
-  file.replace_contents(content, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null)
-
-  await execCommand(['systemctl', '--user', 'daemon-reload'])
-}
-
-export function writeSettingsJson (settings) {
-  const configDir = GLib.build_filenamev([GLib.get_home_dir(), '.config', 'wayvox'])
-  const configPath = GLib.build_filenamev([configDir, 'settings.json'])
-
-  const dir = Gio.file_new_for_path(configDir)
-  try {
-    dir.make_directory_with_parents(null)
-  } catch (e) {
-    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) { throw e }
-  }
-
-  const content = JSON.stringify(settings, null, 2) + '\n'
-  const file = Gio.file_new_for_path(configPath)
-  file.replace_contents(content, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null)
-}
-
-export async function writeServiceOverride (serviceName, envVars) {
-  const overrideDir = GLib.build_filenamev([
-    GLib.get_home_dir(), '.config', 'systemd', 'user',
-    `${serviceName}.d`
-  ])
-  const overridePath = GLib.build_filenamev([overrideDir, 'override.conf'])
-
-  const dir = Gio.file_new_for_path(overrideDir)
-  try {
-    dir.make_directory_with_parents(null)
-  } catch (e) {
-    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) { throw e }
-  }
-
-  let content = '[Service]\n'
-  for (const [key, value] of Object.entries(envVars)) {
-    content += `Environment="${key}=${value}"\n`
-  }
-
-  const file = Gio.file_new_for_path(overridePath)
-  file.replace_contents(content, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null)
-
-  await execCommand(['systemctl', '--user', 'daemon-reload'])
-}
-
-export function openVocabEditor (extPath) {
-  const home = GLib.get_home_dir()
-  const candidates = []
-  if (extPath)
-    candidates.push(GLib.build_filenamev([extPath, '..', 'vocab-editor.py']))
-  candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'wayvox', 'vocab-editor.py']))
-  candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'whisper-npu-server', 'vocab-editor.py']))
-  candidates.push(GLib.build_filenamev([home, 'src', 'whisper-npu-server', 'vocab-editor.py']))
-
-  for (const path of candidates) {
-    if (!GLib.file_test(path, GLib.FileTest.EXISTS))
-      continue
-    try {
-      GLib.spawn_command_line_async('python3 ' + GLib.shell_quote(path))
-      return true
-    } catch (e) {
-      logDebug(`Vocabulary editor failed: ${e.message}`)
-      return false
+    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) {
+      throw e;
     }
   }
-  logDebug('Vocabulary editor not found')
-  return false
+
+  let content = "[Service]\n";
+  for (const [key, value] of Object.entries(envVars)) {
+    content += `Environment="${key}=${value}"\n`;
+  }
+
+  let srcDir = GLib.build_filenamev([
+    GLib.get_home_dir(),
+    "src",
+    "usr",
+    "wayvox",
+  ]);
+  const srcDirReady = GLib.file_test(
+    srcDir,
+    GLib.FileTest.IS_DIR,
+  );
+  if (!srcDirReady)
+    srcDir = GLib.build_filenamev([
+      GLib.get_home_dir(),
+      "src",
+      "usr",
+      "whisper-npu-server",
+    ]);
+  const argsStr = pttArgs.map((a) => `"${a}"`).join(" ");
+  content += `ExecStart=\n`;
+  content += `ExecStart=/usr/bin/python3 ${srcDir}/push_to_talk.py ${argsStr}\n`;
+
+  const file = Gio.file_new_for_path(overridePath);
+  file.replace_contents(
+    content,
+    null,
+    false,
+    Gio.FileCreateFlags.REPLACE_DESTINATION,
+    null,
+  );
+
+  await execCommand(["systemctl", "--user", "daemon-reload"]);
 }
 
-export function openAbout (extPath, host, port) {
-  const home = GLib.get_home_dir()
-  const candidates = []
-  if (extPath)
-    candidates.push(GLib.build_filenamev([extPath, '..', 'about.py']))
-  candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'wayvox', 'about.py']))
-  candidates.push(GLib.build_filenamev([home, 'src', 'usr', 'whisper-npu-server', 'about.py']))
-  candidates.push(GLib.build_filenamev([home, 'src', 'whisper-npu-server', 'about.py']))
+export function writeSettingsJson(settings) {
+  const configDir = GLib.build_filenamev([
+    GLib.get_home_dir(),
+    ".config",
+    "wayvox",
+  ]);
+  const configPath = GLib.build_filenamev([configDir, "settings.json"]);
 
-  const safeHost = String(host || '127.0.0.1').replace(/[^A-Za-z0-9._:-]/g, '') || '127.0.0.1'
-  const safePort = Number(port) || 5000
+  const dir = Gio.file_new_for_path(configDir);
+  try {
+    dir.make_directory_with_parents(null);
+  } catch (e) {
+    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) {
+      throw e;
+    }
+  }
+
+  const content = JSON.stringify(settings, null, 2) + "\n";
+  const file = Gio.file_new_for_path(configPath);
+  file.replace_contents(
+    content,
+    null,
+    false,
+    Gio.FileCreateFlags.REPLACE_DESTINATION,
+    null,
+  );
+}
+
+export async function writeServiceOverride(serviceName, envVars) {
+  const overrideDir = GLib.build_filenamev([
+    GLib.get_home_dir(),
+    ".config",
+    "systemd",
+    "user",
+    `${serviceName}.d`,
+  ]);
+  const overridePath = GLib.build_filenamev([overrideDir, "override.conf"]);
+
+  const dir = Gio.file_new_for_path(overrideDir);
+  try {
+    dir.make_directory_with_parents(null);
+  } catch (e) {
+    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) {
+      throw e;
+    }
+  }
+
+  let content = "[Service]\n";
+  for (const [key, value] of Object.entries(envVars)) {
+    content += `Environment="${key}=${value}"\n`;
+  }
+
+  const file = Gio.file_new_for_path(overridePath);
+  file.replace_contents(
+    content,
+    null,
+    false,
+    Gio.FileCreateFlags.REPLACE_DESTINATION,
+    null,
+  );
+
+  await execCommand(["systemctl", "--user", "daemon-reload"]);
+}
+
+export function openVocabEditor(extPath) {
+  const home = GLib.get_home_dir();
+  const candidates = [];
+  if (extPath)
+    candidates.push(GLib.build_filenamev([extPath, "..", "vocab_editor.py"]));
+  candidates.push(
+    GLib.build_filenamev([home, "src", "usr", "wayvox", "vocab_editor.py"]),
+  );
+  candidates.push(
+    GLib.build_filenamev([
+      home,
+      "src",
+      "usr",
+      "whisper-npu-server",
+      "vocab_editor.py",
+    ]),
+  );
+  candidates.push(
+    GLib.build_filenamev([
+      home,
+      "src",
+      "whisper-npu-server",
+      "vocab_editor.py",
+    ]),
+  );
 
   for (const path of candidates) {
-    if (!GLib.file_test(path, GLib.FileTest.EXISTS))
-      continue
+    if (!GLib.file_test(path, GLib.FileTest.EXISTS)) continue;
+    try {
+      GLib.spawn_command_line_async("python3 " + GLib.shell_quote(path));
+      return true;
+    } catch (e) {
+      logDebug(`Vocabulary editor failed: ${e.message}`);
+      return false;
+    }
+  }
+  logDebug("Vocabulary editor not found");
+  return false;
+}
+
+export function openAbout(extPath, host, port) {
+  const home = GLib.get_home_dir();
+  const candidates = [];
+  if (extPath)
+    candidates.push(GLib.build_filenamev([extPath, "..", "about.py"]));
+  candidates.push(
+    GLib.build_filenamev([home, "src", "usr", "wayvox", "about.py"]),
+  );
+  candidates.push(
+    GLib.build_filenamev([
+      home,
+      "src",
+      "usr",
+      "whisper-npu-server",
+      "about.py",
+    ]),
+  );
+  candidates.push(
+    GLib.build_filenamev([home, "src", "whisper-npu-server", "about.py"]),
+  );
+
+  const safeHost =
+    String(host || "127.0.0.1").replace(/[^A-Za-z0-9._:-]/g, "") || "127.0.0.1";
+  const safePort = Number(port) || 5000;
+
+  for (const path of candidates) {
+    if (!GLib.file_test(path, GLib.FileTest.EXISTS)) continue;
     const cmd = [
-      'python3',
+      "python3",
       GLib.shell_quote(path),
-      '--host',
+      "--host",
       GLib.shell_quote(safeHost),
-      '--port',
-      String(safePort)
-    ].join(' ')
+      "--port",
+      String(safePort),
+    ].join(" ");
     try {
-      GLib.spawn_command_line_async(cmd)
-      return true
+      GLib.spawn_command_line_async(cmd);
+      return true;
     } catch (e) {
-      logDebug(`About dialog failed: ${e.message}`)
-      return false
+      logDebug(`About dialog failed: ${e.message}`);
+      return false;
     }
   }
-  logDebug('About dialog not found')
-  return false
+  logDebug("About dialog not found");
+  return false;
 }
