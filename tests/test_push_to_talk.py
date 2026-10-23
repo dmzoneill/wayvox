@@ -1,7 +1,7 @@
 """Comprehensive tests for push-to-talk.py module."""
 
 import asyncio
-import importlib
+import importlib.util
 import io
 import json
 import math
