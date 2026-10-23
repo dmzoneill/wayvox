@@ -13,15 +13,15 @@ See [branding/README.md](branding/README.md) for product voice, palette, and ico
 ## Quick Start
 
 ```bash
-git clone git@github.com:dmzoneill/whisper-npu-wayland.git
-cd whisper-npu-wayland
+git clone git@github.com:dmzoneill/wayvox.git
+cd wayvox
 make install        # installs deps, system packages, default model, services, permissions
 make start          # starts wayvox-server, wayvox-cpp-server, wayvox-push-to-talk
 make status         # check service status
 make test           # hit health/model endpoints
 ```
 
-The repository URL remains legacy until the GitHub repository itself is renamed. Runtime services, product copy, and assets use Wayvox.
+Repository is now `dmzoneill/wayvox`. Runtime services, product copy, and assets use Wayvox.
 
 That's it. `make install` downloads the default model (`whisper-small.en-fp16-ov`) automatically. See [Models](#models) below for installing additional models.
 
