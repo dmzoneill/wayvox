@@ -164,10 +164,26 @@ install-system: ## Install system packages via dnf (requires sudo)
 # ----------------------------------------------------------------------------
 
 install-whisper-cpp: ## Build and install libwhisper.so from source
-	@if [ -f /usr/local/lib/libwhisper.so ] || [ -f /usr/local/lib64/libwhisper.so ]; then \
-		echo "libwhisper.so already installed"; \
+	@OPENVINO_CMAKE=$$($(PYTHON) -c "import openvino, os; print(os.path.join(os.path.dirname(openvino.__file__), 'cmake'))" 2>/dev/null); \
+	OPENVINO_LIBS=$$($(PYTHON) -c "import openvino, os; print(os.path.join(os.path.dirname(openvino.__file__), 'libs'))" 2>/dev/null); \
+	OPENVINO_SONAME=$$(for candidate in "$$OPENVINO_LIBS"/libopenvino.so.*; do [ -f "$$candidate" ] && basename "$$candidate" && break; done); \
+	WHISPER_LIB=""; \
+	for candidate in /usr/local/lib/libwhisper.so /usr/local/lib64/libwhisper.so; do \
+		if [ -f "$$candidate" ]; then \
+			candidate_soname=$$(readelf -d "$$candidate" 2>/dev/null | sed -n 's/.*Shared library: \[\(libopenvino[^]]*\)\].*/\1/p' | head -1); \
+			if [ -z "$$WHISPER_LIB" ] || [ "$$candidate_soname" = "$$OPENVINO_SONAME" ]; then \
+				WHISPER_LIB="$$candidate"; \
+				[ "$$candidate_soname" = "$$OPENVINO_SONAME" ] && break; \
+			fi; \
+		fi; \
+	done; \
+	LINKED_OPENVINO=$$(if [ -n "$$WHISPER_LIB" ]; then readelf -d "$$WHISPER_LIB" 2>/dev/null | sed -n 's/.*Shared library: \[\(libopenvino[^]]*\)\].*/\1/p' | head -1; fi); \
+	if [ -n "$$WHISPER_LIB" ] && [ "$$LINKED_OPENVINO" = "$$OPENVINO_SONAME" ]; then \
+		echo "libwhisper.so already linked against $$OPENVINO_SONAME"; \
 	else \
-		OPENVINO_CMAKE=$$($(PYTHON) -c "import openvino, os; print(os.path.join(os.path.dirname(openvino.__file__), 'cmake'))" 2>/dev/null); \
+		if [ -n "$$WHISPER_LIB" ]; then \
+			echo "Rebuilding libwhisper.so: linked against $${LINKED_OPENVINO:-unknown}, current OpenVINO is $${OPENVINO_SONAME:-unknown}"; \
+		fi; \
 		if [ -z "$$OPENVINO_CMAKE" ] || [ ! -f "$$OPENVINO_CMAKE/OpenVINOConfig.cmake" ]; then \
 			echo "Error: OpenVINO cmake config not found — run make install-python first"; \
 			exit 1; \
