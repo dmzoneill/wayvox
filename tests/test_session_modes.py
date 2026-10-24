@@ -8,9 +8,8 @@ import wave
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 import dictation_session as ds
+import pytest
 
 FAKE_ECODES = SimpleNamespace(
     EV_KEY=1,
@@ -88,6 +87,7 @@ class TestSetup:
     """State creation and derived settings."""
 
     def test_make_state(self):
+        """Make state."""
         with (
             patch.object(ds, "TranscriptionHistory") as history,
             patch.object(ds, "load_app_contexts", return_value={"a": {}}),
@@ -97,6 +97,7 @@ class TestSetup:
         assert state.app_contexts == {"a": {}}
 
     def test_refresh_derived_openvino(self):
+        """Refresh derived openvino."""
         state = _state(port="5050", clipboard_mode=True)
         with patch.object(ds, "set_clipboard_mode") as clip:
             ds.refresh_derived(state)
@@ -106,6 +107,7 @@ class TestSetup:
         clip.assert_called_once_with(True)
 
     def test_refresh_derived_cpp_unknown_key(self):
+        """Refresh derived cpp unknown key."""
         state = _state(backend="whisper-cpp", key="KEY_NOPE")
         state.derived = {}
         with patch.object(ds, "set_clipboard_mode"):
@@ -118,23 +120,27 @@ class TestBackspace:
     """Backspace helpers for Wayland and X11."""
 
     def test_zero_is_noop(self):
+        """Zero is noop."""
         with patch.object(ds.subprocess, "run") as run:
             ds.backspace_count(0)
         run.assert_not_called()
 
     def test_x11(self, monkeypatch):
+        """X11."""
         monkeypatch.setenv("XDG_SESSION_TYPE", "x11")
         with patch.object(ds.subprocess, "run") as run:
             ds.backspace_count(3)
         assert run.call_args[0][0][-2:] == ["3", "BackSpace"]
 
     def test_wayland(self, monkeypatch):
+        """Wayland."""
         monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
         with patch.object(ds.subprocess, "run") as run:
             ds.backspace_count(2)
         assert run.call_count == 2
 
     def test_wayland_missing_ydotool(self, monkeypatch):
+        """Wayland missing ydotool."""
         monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
         with patch.object(ds.subprocess, "run", side_effect=FileNotFoundError) as run:
             ds.backspace_count(2)
@@ -161,6 +167,7 @@ class TestStreaming:
         return typer, back, sleep
 
     def test_types_only_the_changed_suffix(self):
+        """Types only the changed suffix."""
         state = _state(backend="whisper-cpp")
         second = b"\x01\x00" * ds.SAMPLE_RATE
         texts = ["hello wx", "hello wx", "hello world"]
@@ -171,12 +178,14 @@ class TestStreaming:
         assert state.take.typed_char_count == len("hello world")
 
     def test_skips_short_audio(self):
+        """Skips short audio."""
         state = _state(backend="whisper-cpp")
         typer, _back, sleep = self._loop(state, [b""], [])
         typer.assert_not_awaited()
         sleep.assert_any_await(0.5)
 
     def test_skips_under_half_second(self):
+        """Skips under half second."""
         state = _state(backend="whisper-cpp")
         audio = b"\x01\x00" * ds.SAMPLE_RATE
         with patch.object(ds, "CHANNELS", 4):
@@ -189,6 +198,7 @@ class TestFinalize:
     """Finishing a take in hold and toggle modes."""
 
     def test_silence_restores_muted_streams(self):
+        """Silence restores muted streams."""
         state = _state()
         state.take.mode = "hold"
         state.take.muted_streams = [1]
@@ -199,12 +209,14 @@ class TestFinalize:
         assert state.take.mode is None
 
     def test_too_short(self):
+        """Too short."""
         state = _state()
         state.take.mode = "hold"
         _finalize(state, _wav(0.1))
         assert state.take.mode is None
 
     def test_cancels_live_stream(self):
+        """Cancels live stream."""
         state = _state()
 
         async def scenario():
@@ -217,6 +229,7 @@ class TestFinalize:
         assert state.take.streaming_task is None
 
     def test_toggle_cpp(self):
+        """Toggle cpp."""
         state = _state(backend="whisper-cpp")
         state.take.mode = "toggle"
         state.take.streamed_text = "hi"
@@ -229,6 +242,7 @@ class TestFinalize:
         assert state.take.streamed_text == ""
 
     def test_toggle_cpp_empty(self):
+        """Toggle cpp empty."""
         state = _state(backend="whisper-cpp")
         state.take.mode = "toggle"
         with (
@@ -240,6 +254,7 @@ class TestFinalize:
         assert state.take.mode is None
 
     def test_hold_no_text(self):
+        """Hold no text."""
         state = _state()
         state.take.mode = "hold"
         with patch.object(ds, "transcribe_batch", AsyncMock(return_value="")):
@@ -247,6 +262,7 @@ class TestFinalize:
         assert state.take.mode is None
 
     def test_hold_postprocesses_and_remembers(self):
+        """Hold postprocesses and remembers."""
         state = _state(
             backend="whisper-cpp",
             sound=True,
@@ -275,6 +291,7 @@ class TestFinalize:
         notify.assert_called_once_with("Whisper", "SALUT.")
 
     def test_hold_voice_command(self):
+        """Hold voice command."""
         state = _state(voice_commands=True, notifications=True)
         state.take.mode = "hold"
         with (
@@ -307,6 +324,7 @@ class TestFinalize:
         return state, ctx, typer
 
     def test_context_handoff(self):
+        """Context handoff."""
         contexts = {"code": {"tones": ["formal"]}}
         state, ctx, typer = self._deliver(contexts, True, False, voice_commands=True)
         assert json.loads(ctx.call_args[0][1]) == {"tones": ["formal"], "app": "code"}
@@ -314,6 +332,7 @@ class TestFinalize:
         assert state.previous.used_dbus is True
 
     def test_plain_handoff_after_context_refused(self):
+        """Plain handoff after context refused."""
         contexts = {"code": {"tones": ["x"]}}
         state, ctx, typer = self._deliver(contexts, False, True)
         ctx.assert_called_once()
@@ -321,6 +340,7 @@ class TestFinalize:
         assert state.previous.used_dbus is True
 
     def test_types_when_no_shell(self):
+        """Types when no shell."""
         state, _ctx, typer = self._deliver({}, False, False)
         typer.assert_awaited_once_with("hi", delay_ms=4)
         assert state.previous.used_dbus is False
@@ -398,29 +418,34 @@ class TestCorrection:
         return back, typer, notify
 
     def test_nothing_to_correct(self):
+        """Nothing to correct."""
         state = _state()
         state.take.mode = "correction"
         _run(ds.correct_last_transcription(state))
         assert state.take.mode is None
 
     def test_after_dbus(self):
+        """After dbus."""
         state = self._prev_state()
         state.previous.used_dbus = True
         _back, _typer, notify = self._correct(state, {})
         notify.assert_called_once()
 
     def test_without_aiohttp(self):
+        """Without aiohttp."""
         state = self._prev_state()
         with patch.object(ds, "aiohttp", None):
             _run(ds.correct_last_transcription(state))
         assert state.take.mode is None
 
     def test_models_unavailable(self):
+        """Models unavailable."""
         state = self._prev_state()
         _back, typer, _notify = self._correct(state, {"/models": FakeResponse(500, {})})
         typer.assert_not_awaited()
 
     def test_no_larger_model(self):
+        """No larger model."""
         state = self._prev_state()
         routes = {
             "/models": FakeResponse(200, {"models": [SMALL, "other"]}),
@@ -430,6 +455,7 @@ class TestCorrection:
         notify.assert_called_once_with("Whisper", "No larger model available")
 
     def test_corrects_with_larger_model(self):
+        """Corrects with larger model."""
         state = self._prev_state(notifications=True, language="de")
         routes = {
             "/models": FakeResponse(200, {"models": [SMALL, LARGE]}),
@@ -443,6 +469,7 @@ class TestCorrection:
         assert state.previous.typed_text == "new"
 
     def test_same_result(self):
+        """Same result."""
         state = self._prev_state(notifications=True)
         routes = {
             "/models": FakeResponse(200, {"models": [LARGE]}),
@@ -454,6 +481,7 @@ class TestCorrection:
         notify.assert_called_once_with("Whisper", "Same result with larger model")
 
     def test_retranscribe_failed(self):
+        """Retranscribe failed."""
         state = self._prev_state()
         routes = {
             "/models": FakeResponse(200, {"models": [LARGE]}),
@@ -464,6 +492,7 @@ class TestCorrection:
         typer.assert_not_awaited()
 
     def test_retranscribe_error(self):
+        """Retranscribe error."""
         state = self._prev_state()
         routes = {
             "/models": FakeResponse(200, {"models": [LARGE]}),
@@ -501,6 +530,7 @@ class TestKeyboards:
     """Keyboard event pumps and hot-plug scanning."""
 
     def test_pump_events_aborts_on_escape(self):
+        """Pump events aborts on escape."""
         escape = SimpleNamespace(type=FAKE_ECODES.EV_KEY, code=27, value=1)
         other = SimpleNamespace(type=0, code=0, value=0)
         device = FakeDevice([escape, other], close_error=True)
@@ -516,6 +546,7 @@ class TestKeyboards:
         assert device.closed
 
     def test_watch_keyboards_rescans(self):
+        """Watch keyboards rescans."""
         state = _state()
         first = FakeDevice([], "/a")
         second = FakeDevice([], "/b")
@@ -576,20 +607,24 @@ class TestRecall:
         return run, notify
 
     def test_copies_last_transcript(self):
+        """Copies last transcript."""
         run, notify = self._recall([("text",)])
         assert run.call_args[0][0] == ["wl-copy", "text"]
         notify.assert_called_once()
 
     def test_empty_history(self):
+        """Empty history."""
         run, _notify = self._recall([])
         run.assert_not_called()
 
     def test_wl_copy_failure(self):
+        """Wl copy failure."""
         error = subprocess.CalledProcessError(1, "wl-copy")
         _run_mock, notify = self._recall([("text",)], run_error=error)
         notify.assert_not_called()
 
     def test_picker_shown(self):
+        """Picker shown."""
         state = _state()
         with patch.object(ds, "try_dbus_history_picker", return_value=True):
             _press(state, _key(RECALL, 1), _key(RECALL, 0))
@@ -600,12 +635,14 @@ class TestKeyHandling:
     """Hotkey down/up dispatch into hold, toggle, and correction."""
 
     def test_ignores_other_events(self):
+        """Ignores other events."""
         state = _state()
         _run(ds.handle_key_event(state, SimpleNamespace(type=0)))
         _press(state, _key(5, 1), _key(TARGET, 2))
         assert state.take.recording is None
 
     def test_key_down_starts_recording(self):
+        """Key down starts recording."""
         state = _state(sound=True, mute_streams=True)
         recording = MagicMock()
         recording.proc.pid = 42
@@ -620,6 +657,7 @@ class TestKeyHandling:
         assert state.take.recording is recording
 
     def test_second_tap_stops_toggle(self):
+        """Second tap stops toggle."""
         state = _state()
         state.take.recording = MagicMock()
         state.take.mode = "toggle"
@@ -632,6 +670,7 @@ class TestKeyHandling:
         final.assert_not_awaited()
 
     def test_key_up_without_recording(self):
+        """Key up without recording."""
         state = _state()
         _press(state, _key(TARGET, 0))
         assert state.take.mode is None
@@ -661,12 +700,14 @@ class TestKeyHandling:
         return _run(scenario())
 
     def test_long_hold_transcribes(self):
+        """Long hold transcribes."""
         state = _state()
         final, _fix = self._release(state, ds.HOLD_THRESHOLD + 1)
         final.assert_awaited_once()
         assert state.take.mode == "hold"
 
     def test_short_tap_enters_toggle(self):
+        """Short tap enters toggle."""
         state = _state()
         self._release(state, 0)
         assert state.take.mode == "toggle"
@@ -676,6 +717,7 @@ class TestKeyHandling:
         assert state.take.streaming_task is not None
 
     def test_quick_tap_corrects(self):
+        """Quick tap corrects."""
         state = _state()
         state.take.muted_streams = [3]
         _final, fix = self._release(state, 0, correction=True)
@@ -706,7 +748,7 @@ class TestRunDictation:
         async def fake_watch_keyboards(_state, _devices, queue):
             await queue.put("event")
 
-        async def stop_after_reload(*_args):
+        async def stop(*_args):
             captured["callback"]({})
             raise asyncio.CancelledError
 
@@ -717,26 +759,28 @@ class TestRunDictation:
             patch.object(ds, "find_keyboards", return_value=keyboards),
             patch.object(ds, "watch_config", fake_watch_config),
             patch.object(ds, "watch_keyboards", fake_watch_keyboards),
-            patch.object(
-                ds, "handle_key_event", AsyncMock(side_effect=stop_after_reload)
-            ),
+            patch.object(ds, "handle_key_event", AsyncMock(side_effect=stop)),
         ):
             _run(ds.run_dictation(_settings()))
         return captured
 
     def test_requires_evdev(self):
+        """Requires evdev."""
         with pytest.raises(SystemExit):
             self._start([FakeDevice([])], None)
 
     def test_requires_known_key(self):
+        """Requires known key."""
         with pytest.raises(SystemExit):
             self._start([FakeDevice([])], MagicMock(), target=None)
 
     def test_requires_keyboard(self):
+        """Requires keyboard."""
         with pytest.raises(SystemExit):
             self._start([], MagicMock())
 
     def test_handles_events_and_reloads(self):
+        """Handles events and reloads."""
         captured = {}
         with pytest.raises(asyncio.CancelledError):
             self._start([FakeDevice([])], MagicMock(), captured=captured)

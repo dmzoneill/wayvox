@@ -20,12 +20,14 @@ def _main(argv, loaded=None):
 
 
 def test_defaults():
+    """Defaults."""
     call, apply, _start = _main([])
     apply.assert_not_called()
     assert call.args == ("coro",)
 
 
 def test_overrides_and_config():
+    """Overrides and config."""
     argv = ["--backend", "whisper-cpp", "--port", "5100", "--language", "de"]
     _call, apply, start = _main(argv, loaded={"sound": False})
     settings = start.call_args.args[0]
@@ -36,5 +38,6 @@ def test_overrides_and_config():
 
 
 def test_requires_aiohttp():
+    """Requires aiohttp."""
     with patch.object(ptt.dictation_audio, "aiohttp", None):
         assert ptt.main([]) == 1
