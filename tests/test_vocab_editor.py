@@ -94,10 +94,9 @@ class TestEditor:
         _module, app = editor
         gtk = editor_gtk[1]
         connects = gtk.Button.return_value.connect.call_args_list
-        handlers = {
-            getattr(call.args[1], "__name__", ""): call.args[1] for call in connects
-        }
-        reset = handlers["_reset_to_defaults"]
+        handlers = [call.args[1] for call in connects]
+        names = [getattr(handler, "__name__", "") for handler in handlers]
+        reset = handlers[names.index("_reset_to_defaults")]
         reset(None)
         app.status.set_label.assert_called_with("Defaults loaded. Save to keep them.")
 
