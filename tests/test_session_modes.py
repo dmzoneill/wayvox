@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import dictation_session as ds
-import pytest
 
 FAKE_ECODES = SimpleNamespace(
     EV_KEY=1,
@@ -76,11 +75,26 @@ def _finalize(state, wav):
         _run(ds.finalize_recording(state, 5000, 4))
 
 
-@pytest.fixture(name="codes", autouse=True)
-def fixture_codes():
+_ECODES_PATCH = patch.object(ds, "ecodes", FAKE_ECODES)
+
+
+def setup_module():
     """Expose fake evdev key codes to the session module."""
-    with patch.object(ds, "ecodes", FAKE_ECODES):
-        yield FAKE_ECODES
+    _ECODES_PATCH.start()
+
+
+def teardown_module():
+    """Restore the real evdev key codes."""
+    _ECODES_PATCH.stop()
+
+
+def _raises(error, action, *args, **kwargs):
+    """Return True when calling *action* raises *error*."""
+    try:
+        action(*args, **kwargs)
+    except error:
+        return True
+    return False
 
 
 class TestSetup:
@@ -563,10 +577,12 @@ class TestKeyboards:
             with (
                 patch.object(ds, "find_keyboards", return_value=[second]) as find,
                 patch.object(ds.asyncio, "sleep", fake_sleep),
-                pytest.raises(asyncio.CancelledError),
             ):
-                await ds.watch_keyboards(state, [first], asyncio.Queue())
-            return find
+                try:
+                    await ds.watch_keyboards(state, [first], asyncio.Queue())
+                except asyncio.CancelledError:
+                    return find
+            return None
 
         find = _run(scenario())
         assert find.call_count == 1
@@ -766,22 +782,21 @@ class TestRunDictation:
 
     def test_requires_evdev(self):
         """Requires evdev."""
-        with pytest.raises(SystemExit):
-            self._start([FakeDevice([])], None)
+        assert _raises(SystemExit, self._start, [FakeDevice([])], None)
 
     def test_requires_known_key(self):
         """Requires known key."""
-        with pytest.raises(SystemExit):
-            self._start([FakeDevice([])], MagicMock(), target=None)
+        devices = [FakeDevice([])]
+        assert _raises(SystemExit, self._start, devices, MagicMock(), target=None)
 
     def test_requires_keyboard(self):
         """Requires keyboard."""
-        with pytest.raises(SystemExit):
-            self._start([], MagicMock())
+        assert _raises(SystemExit, self._start, [], MagicMock())
 
     def test_handles_events_and_reloads(self):
         """Handles events and reloads."""
         captured = {}
-        with pytest.raises(asyncio.CancelledError):
-            self._start([FakeDevice([])], MagicMock(), captured=captured)
+        devices = [FakeDevice([])]
+        cancelled = asyncio.CancelledError
+        assert _raises(cancelled, self._start, devices, MagicMock(), captured=captured)
         assert captured["refreshes"] == 2
