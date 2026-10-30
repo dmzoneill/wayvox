@@ -395,11 +395,10 @@ async def _fetch_json(url):
     if aiohttp is None:
         return None
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    return None
-                return await resp.json()
+        async with aiohttp.ClientSession() as session, session.get(url) as resp:
+            if resp.status != 200:
+                return None
+            return await resp.json()
     except _http_errors():
         return None
 
@@ -432,12 +431,12 @@ async def _retranscribe(state, model_name):
     if state.settings["language"]:
         url += f"?language={state.settings['language']}"
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=state.previous.wav_bytes) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
-                return data.get("text", "").strip()
+        body = state.previous.wav_bytes
+        async with aiohttp.ClientSession() as http, http.post(url, data=body) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+            return data.get("text", "").strip()
     except _http_errors():
         return None
 

@@ -77,6 +77,9 @@ MODEL_NAME = os.environ.get("WHISPER_MODEL", "whisper-small.en-fp16-ov")
 CT2_MODEL_NAME = os.environ.get("WHISPER_CT2_MODEL", "small.en")
 LLM_MODEL = os.environ.get("WHISPER_LLM_MODEL", "")
 
+_SUMMARIZE_TASK = "Summarize the following text in one concise sentence."
+_SUMMARIZE_ONLY = "Return only the summary, nothing else."
+
 DEFAULT_TONES = {
     "diplomatic": (
         "Rewrite the following text to sound warmer, more considerate, "
@@ -88,12 +91,7 @@ DEFAULT_TONES = {
         "Preserve the original meaning exactly. "
         "Return only the rewritten text, nothing else."
     ),
-    "summarize": " ".join(
-        (
-            "Summarize the following text in one concise sentence.",
-            "Return only the summary, nothing else.",
-        ),
-    ),
+    "summarize": _SUMMARIZE_TASK + " " + _SUMMARIZE_ONLY,
 }
 
 
@@ -879,11 +877,16 @@ def _history_rows(limit):
     return rows
 
 
+def _local_time(stamp):
+    """Return a timezone-aware local datetime for a Unix timestamp."""
+    return datetime.datetime.fromtimestamp(stamp, tz=datetime.timezone.utc).astimezone()
+
+
 def _history_json(rows):
     """Return history rows as JSON items with ISO timestamps."""
     items = []
     for text, stamp in rows:
-        when = datetime.datetime.fromtimestamp(stamp).isoformat()
+        when = _local_time(stamp).isoformat()
         items.append({"text": text, "timestamp": stamp, "datetime": when})
     return jsonify({"items": items, "count": len(items)})
 
@@ -892,7 +895,7 @@ def _history_markdown(rows):
     """Return history rows as a markdown document."""
     lines = ["# Transcription History\n"]
     for text, stamp in rows:
-        when = datetime.datetime.fromtimestamp(stamp)
+        when = _local_time(stamp)
         heading = when.strftime("%H:%M — %Y-%m-%d")
         lines.append(f"## {heading}\n\n{text}\n")
     return Response("\n".join(lines), mimetype="text/markdown")
@@ -902,7 +905,7 @@ def _history_srt(rows):
     """Return history rows as an SRT subtitle file."""
     lines = []
     for index, (text, stamp) in enumerate(rows, 1):
-        when = datetime.datetime.fromtimestamp(stamp)
+        when = _local_time(stamp)
         start = when.strftime("%H:%M:%S,000")
         seconds = max(3, len(text) * 0.05)
         end_at = when + datetime.timedelta(seconds=seconds)
