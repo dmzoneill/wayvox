@@ -13,13 +13,14 @@ def fixture_editor_gtk():
 
 
 @pytest.fixture(name="editor")
-def fixture_editor(editor_gtk):
+def fixture_editor(editor_gtk, tmp_path):
     """Return an activated Editor with its vocabulary file mocked."""
     module = editor_gtk[0]
+    vocab_file = str(tmp_path / "v.json")
     config = {"enabled": False, "terms": ["kubectl"], "replacements": []}
     with (
         patch.object(module.vocab, "load", return_value=config),
-        patch.object(module.vocab, "default_path", return_value="/tmp/v.json"),
+        patch.object(module.vocab, "default_path", return_value=vocab_file),
     ):
         app = module.Editor()
         app.do_activate()

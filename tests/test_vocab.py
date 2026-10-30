@@ -252,10 +252,12 @@ def test_prompt_slot_log_names_max_prompt_len(monkeypatch, caplog):
 def test_load_whisper_pipeline_falls_back_when_static_flag_rejected(
     monkeypatch,
     caplog,
+    tmp_path,
 ):
     """Test that load whisper pipeline falls back when static flag rejected."""
+    cache_dir = str(tmp_path / "cache")
     monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "1")
-    monkeypatch.setenv("WHISPER_CACHE_DIR", "/tmp/wayvox-test-cache")
+    monkeypatch.setenv("WHISPER_CACHE_DIR", cache_dir)
     monkeypatch.setattr(vocab.STATE, "failover_logged", set())
     monkeypatch.setattr(vocab.STATE, "failover_reasons", [])
     calls = []
@@ -272,7 +274,7 @@ def test_load_whisper_pipeline_falls_back_when_static_flag_rejected(
     wide = {
         "device": "NPU",
         "word_timestamps": True,
-        "CACHE_DIR": "/tmp/wayvox-test-cache",
+        "CACHE_DIR": cache_dir,
     }
     assert calls == [
         {**wide, "STATIC_PIPELINE": False},

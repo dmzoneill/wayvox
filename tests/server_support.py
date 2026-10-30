@@ -3,6 +3,7 @@
 import importlib
 import os
 import sys
+import tempfile
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -19,13 +20,15 @@ _mock_librosa.load.return_value = (np.zeros(16000, dtype=np.float32), 16000)
 sys.modules["openvino_genai"] = _mock_ov
 sys.modules["librosa"] = _mock_librosa
 
+_TEST_HOME = tempfile.mkdtemp(prefix="wayvox-test-home-")
+
 _patches = [
     patch("os.path.exists", return_value=True),
     patch("os.listdir", return_value=["whisper-small-en"]),
     patch("os.path.isdir", return_value=True),
     patch(
         "os.path.expanduser",
-        side_effect=lambda path: path.replace("~", "/tmp/_test_home"),
+        side_effect=lambda path: path.replace("~", _TEST_HOME),
     ),
 ]
 for _patch in _patches:

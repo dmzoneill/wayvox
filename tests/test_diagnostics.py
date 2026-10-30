@@ -127,7 +127,7 @@ def test_format_report_names_devices_library_and_failover():
                 "device": "NPU",
                 "failover": ["prompt_slot"],
             },
-            "vocab": {"terms": 105, "replacements": 74, "path": "/tmp/vocabulary.json"},
+            "vocab": {"terms": 105, "replacements": 74, "path": "~/vocabulary.json"},
         },
     }
     text = diagnostics.format_report(report)
