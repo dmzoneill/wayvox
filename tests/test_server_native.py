@@ -131,10 +131,11 @@ class TestModelManager:
             handle.write("")
         assert model_mgr.list_models() == []
 
-    def test_load_model_cache_miss(self, model_mgr, monkeypatch):
+    def test_load_model_cache_miss(self, model_mgr, monkeypatch, tmp_path):
         """Load model cache miss."""
+        cache_dir = str(tmp_path / "cache")
         monkeypatch.setenv("WHISPER_NPU_WORD_TIMESTAMPS", "1")
-        monkeypatch.setenv("WHISPER_CACHE_DIR", "/tmp/wayvox-test-cache")
+        monkeypatch.setenv("WHISPER_CACHE_DIR", cache_dir)
         monkeypatch.setattr(server_mod, "ENGINE", "openvino")
         monkeypatch.setattr(server_mod, "DEVICE", "NPU")
         monkeypatch.setattr(server_mod.ENGINES, "openvino_genai", mock_ov)
@@ -146,7 +147,7 @@ class TestModelManager:
             device="NPU",
             STATIC_PIPELINE=False,
             word_timestamps=True,
-            CACHE_DIR="/tmp/wayvox-test-cache",
+            CACHE_DIR=cache_dir,
         )
         assert "whisper-small-en" in model_mgr.pipelines
 

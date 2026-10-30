@@ -9,7 +9,7 @@ import pytest
 
 
 @pytest.fixture
-def server_smoke():
+def server_smoke(tmp_path):
     """Import the transcription server with filesystem and device libraries mocked."""
     mock_ov = MagicMock()
     mock_librosa = MagicMock()
@@ -22,7 +22,7 @@ def server_smoke():
     directory = patch("os.path.isdir", return_value=True)
     expanduser = patch(
         "os.path.expanduser",
-        side_effect=lambda path: path.replace("~", "/tmp/smoke"),
+        side_effect=lambda path: path.replace("~", str(tmp_path)),
     )
     with exists, listing, directory, expanduser:
         module = importlib.import_module("server_native")
