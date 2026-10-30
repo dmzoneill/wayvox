@@ -21,9 +21,10 @@ import librosa
 from flask import Flask, jsonify, request
 
 import diagnostics
+import server_security
 import vocab
 
-app = Flask(__name__)
+app = server_security.install_csrf_guard(Flask(__name__))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -485,6 +486,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Whisper.cpp streaming server")
     parser.add_argument("--port", type=int, default=5001)
     parser.add_argument(
+        "--host",
+        default=None,
+        help="Address to listen on (default: $WAYVOX_BIND_HOST or 127.0.0.1)",
+    )
+    parser.add_argument(
         "--model",
         default=os.path.expanduser("~/.cache/whisper/ggml-base.bin"),
     )
@@ -525,4 +531,4 @@ if __name__ == "__main__":
         language=args.language,
         no_speech_thold=args.no_speech_thold,
     )
-    app.run(host="0.0.0.0", port=args.port, threaded=True)
+    app.run(host=server_security.bind_host(args.host), port=args.port, threaded=True)
