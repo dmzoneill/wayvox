@@ -17,12 +17,11 @@ import os
 import threading as _threading
 import time
 
-import librosa
-from flask import Flask, jsonify, request
-
 import diagnostics
+import librosa
 import server_security
 import vocab
+from flask import Flask, jsonify, request
 
 app = server_security.install_csrf_guard(Flask(__name__))
 logging.basicConfig(level=logging.INFO)

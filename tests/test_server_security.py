@@ -1,8 +1,7 @@
 """Tests for the bind-host and cross-origin guard helpers."""
 
-from flask import Flask
-
 import server_security
+from flask import Flask
 
 
 def _client():
