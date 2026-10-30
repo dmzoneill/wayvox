@@ -40,6 +40,7 @@ except ImportError as import_error:
     _OPENVINO_GENAI_IMPORT_ERROR = import_error
 
 import diagnostics
+import server_security
 import vocab
 from wayvox_paths import history_file
 
@@ -68,7 +69,7 @@ ENGINES.bind_faster_whisper(faster_whisper_cls)
 
 SERVER_START_TIME = time.time()
 
-app = Flask(__name__)
+app = server_security.install_csrf_guard(Flask(__name__))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -948,4 +949,4 @@ if __name__ == "__main__":
             llm_manager.load_model()
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             logger.warning("LLM model not loaded: %s", exc)
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host=server_security.bind_host(), port=5000)

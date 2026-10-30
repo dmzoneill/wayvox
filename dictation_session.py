@@ -85,6 +85,7 @@ class DictationState:
     app_contexts: dict = field(default_factory=dict)
     take: TakeState = field(default_factory=TakeState)
     previous: PreviousTake = field(default_factory=PreviousTake)
+    background_tasks: tuple = ()
 
 
 def make_state(settings):
@@ -227,7 +228,11 @@ async def _cancel_streaming(state):
     try:
         await task
     except asyncio.CancelledError:
-        pass
+        # Expected: the streaming task was cancelled above. Re-raise only if
+        # the caller itself is being cancelled.
+        current = asyncio.current_task()
+        if current is not None and current.cancelling():
+            raise
     state.take.streaming_task = None
 
 
@@ -684,9 +689,11 @@ async def run_dictation(settings):
         """Apply a reloaded settings file to the running session."""
         refresh_derived(state)
 
-    asyncio.create_task(watch_config(settings, _on_config_change))
+    # Keep references so the background watchers are not garbage collected.
+    config_task = asyncio.create_task(watch_config(settings, _on_config_change))
     event_queue = asyncio.Queue()
-    asyncio.create_task(watch_keyboards(state, keyboards, event_queue))
+    keyboards_task = asyncio.create_task(watch_keyboards(state, keyboards, event_queue))
+    state.background_tasks = (config_task, keyboards_task)
     while True:
         event = await event_queue.get()
         await handle_key_event(state, event)
