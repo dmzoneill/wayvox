@@ -95,6 +95,15 @@ DEFAULT_TONES = {
 }
 
 
+def _model_dir(base_dir, model_name):
+    """Return base_dir/model_name, refusing names that escape base_dir."""
+    base = os.path.realpath(base_dir)
+    path = os.path.realpath(os.path.join(base, model_name))
+    if not path.startswith(base + os.sep):
+        raise ValueError(f"Invalid model name: {model_name!r}")
+    return path
+
+
 def detect_engine_and_device():
     """Return the engine and device, preferring NPU, CUDA, Intel GPU, then CPU."""
     raw = os.environ.get("WHISPER_DEVICE", "auto").strip()
@@ -278,7 +287,7 @@ class ModelManager:
     def _load_openvino(self, model_name):
         """Build an OpenVINO WhisperPipeline for one installed model."""
         assert ENGINES.openvino_genai is not None
-        model_path = os.path.join(self.models_dir, model_name)
+        model_path = _model_dir(self.models_dir, model_name)
         if not os.path.exists(model_path):
             missing = f"Model {model_name} not found at {model_path}"
             raise FileNotFoundError(missing)
@@ -299,8 +308,11 @@ class ModelManager:
         if ":" in DEVICE:
             cuda_index = int(DEVICE.split(":")[1])
         cuda_device = DEVICE.split(":")[0]
-        local_path = os.path.join(self.ct2_models_dir, model_name)
-        if os.path.isdir(local_path):
+        try:
+            local_path = _model_dir(self.ct2_models_dir, model_name)
+        except ValueError:
+            local_path = ""  # not a local directory name, e.g. a Hugging Face repo id
+        if local_path and os.path.isdir(local_path):
             source = local_path
         else:
             source = model_name
@@ -491,7 +503,7 @@ class LLMManager:
         model_name = model_name or self.current_model
         if not model_name:
             raise ValueError("No LLM model configured")
-        model_path = os.path.join(self.models_dir, model_name)
+        model_path = _model_dir(self.models_dir, model_name)
         if not os.path.exists(model_path):
             missing = f"LLM model {model_name} not found at {model_path}"
             raise FileNotFoundError(missing)
