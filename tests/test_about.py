@@ -43,12 +43,12 @@ class TestReports:
             assert about.fetch_report("http://h")["text"] == "server"
 
     def test_fetch_report_rejects_list(self, about_gtk):
-        """Fetch report rejects list."""
+        """Fetch report rejects a non-object (list) payload with TypeError."""
         about = about_gtk[0]
         reply = _response([1])
         with (
             patch.object(about.urllib.request, "urlopen", return_value=reply),
-            pytest.raises(ValueError),
+            pytest.raises(TypeError),
         ):
             about.fetch_report("http://h")
 

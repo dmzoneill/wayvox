@@ -49,7 +49,7 @@ def _scrolled_view(buf):
     return scrolled
 
 
-class Editor(_EditorBase):  # type: ignore[misc, valid-type]
+class Editor(_EditorBase):
     """GTK editor for the Wayvox technical vocabulary file."""
 
     def __init__(self):

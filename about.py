@@ -50,7 +50,7 @@ def fetch_report(url):
     with urllib.request.urlopen(request, timeout=4) as response:
         payload = json.loads(response.read().decode())
     if not isinstance(payload, dict):
-        raise ValueError("server returned a non-object")
+        raise TypeError("server returned a non-object")
     payload.setdefault("source", url)
     if not payload.get("text"):
         payload["text"] = diagnostics.format_report(payload)
@@ -64,6 +64,7 @@ def report_for(url):
     except (
         urllib.error.URLError,
         TimeoutError,
+        TypeError,
         ValueError,
         json.JSONDecodeError,
         OSError,
@@ -92,7 +93,7 @@ def _padded_column():
     return box
 
 
-class About(_AboutBase):  # type: ignore[misc, valid-type]
+class About(_AboutBase):
     """GTK application that shows Wayvox hardware and library versions."""
 
     def __init__(self, report_text):

@@ -16,6 +16,7 @@ import sys
 import time
 import urllib.request
 from subprocess import CalledProcessError, TimeoutExpired
+from typing import Any
 
 import dbus
 import dbus.mainloop.glib
@@ -28,7 +29,7 @@ from wayvox_paths import config_file
 _QtCore = importlib.import_module("PyQt6.QtCore")
 _QtGui = importlib.import_module("PyQt6.QtGui")
 _QtWidgets = importlib.import_module("PyQt6.QtWidgets")
-QObject = _QtCore.QObject
+QObject: Any = _QtCore.QObject
 Qt = _QtCore.Qt
 QThread = _QtCore.QThread
 QTimer = _QtCore.QTimer
@@ -40,10 +41,10 @@ QApplication = _QtWidgets.QApplication
 QGraphicsDropShadowEffect = _QtWidgets.QGraphicsDropShadowEffect
 QHBoxLayout = _QtWidgets.QHBoxLayout
 QLabel = _QtWidgets.QLabel
-QPushButton = _QtWidgets.QPushButton
+QPushButton: Any = _QtWidgets.QPushButton
 QSizePolicy = _QtWidgets.QSizePolicy
 QVBoxLayout = _QtWidgets.QVBoxLayout
-QWidget = _QtWidgets.QWidget
+QWidget: Any = _QtWidgets.QWidget
 
 try:
     from gi.repository import GLib
@@ -253,7 +254,7 @@ def _window_from_xdotool():
         return ("", "")
 
 
-class OverlayCard(QPushButton):  # type: ignore[misc, valid-type]
+class OverlayCard(QPushButton):
     """A single tone card in a floating overlay."""
 
     def __init__(self, tone, text, ready=False, parent=None):
@@ -305,7 +306,7 @@ class OverlayCard(QPushButton):  # type: ignore[misc, valid-type]
         self.setStyleSheet(CARD_STYLE)
 
 
-class FloatingPanel(QWidget):  # type: ignore[misc, valid-type]
+class FloatingPanel(QWidget):
     """Frameless panel anchored to the bottom-right of the screen."""
 
     def __init__(self):
@@ -492,7 +493,7 @@ class HistoryOverlay(FloatingPanel):
         type_text(text)
 
 
-class RewriteWorker(QObject):  # type: ignore[misc, valid-type]
+class RewriteWorker(QObject):
     """Fetch one rewrite tone without blocking the Qt thread."""
 
     finished = pyqtSignal(str, str)
