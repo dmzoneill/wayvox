@@ -12,19 +12,23 @@ import subprocess
 import sys
 from typing import Any
 
+PackageNotFoundError: type[BaseException]
+_package_version: Any
 try:
-    from importlib.metadata import PackageNotFoundError
-    from importlib.metadata import version as _package_version
-except ImportError:
-    PackageNotFoundError = ImportError  # type: ignore[misc, assignment]
-    _package_version = None  # type: ignore[no-redef, assignment]
+    from importlib import metadata as _metadata
 
-_OV_IMPORT_ERROR: BaseException | None = None
+    PackageNotFoundError = _metadata.PackageNotFoundError
+    _package_version = _metadata.version
+except ImportError:
+    PackageNotFoundError = ImportError
+    _package_version = None
+
+_ov_import_error: BaseException | None = None
 try:
     import openvino as ov
 except ImportError as exc:
     ov = None
-    _OV_IMPORT_ERROR = exc
+    _ov_import_error = exc
 
 _OV_ERROR: Any = None
 if ov is not None:
@@ -243,7 +247,7 @@ def _nvidia():
 
 
 def _missing_openvino(version):
-    exc = _OV_IMPORT_ERROR
+    exc = _ov_import_error
     if exc is None:
         exc = ImportError("openvino is not installed")
     return {
