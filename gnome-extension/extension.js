@@ -443,7 +443,10 @@ const WayvoxIndicator = GObject.registerClass(
       this._buildMenu();
 
       this.menu.connect("open-state-changed", (_menu, isOpen) => {
-        if (isOpen) this._refreshStatus();
+        if (isOpen)
+          this._refreshStatus().catch((e) =>
+            logDebug(`Status refresh failed: ${e.message}`),
+          );
       });
 
       this._settingsChangedId = this._settings.connect(
@@ -530,7 +533,9 @@ const WayvoxIndicator = GObject.registerClass(
       if (!enabled) return false;
 
       logDebug(`Language Buddy received: ${text.substring(0, 80)}`);
-      this._processTranscription(text);
+      this._processTranscription(text).catch((e) =>
+        logDebug(`Transcription processing failed: ${e.message}`),
+      );
       return true;
     }
 
@@ -545,10 +550,14 @@ const WayvoxIndicator = GObject.registerClass(
           context.tones && context.tones.length > 0
             ? context.tones
             : DEFAULT_TONES;
-        this._processTranscription(text, tones);
+        this._processTranscription(text, tones).catch((e) =>
+          logDebug(`Transcription processing failed: ${e.message}`),
+        );
       } catch (e) {
         logDebug(`Context parse error: ${e.message}`);
-        this._processTranscription(text);
+        this._processTranscription(text).catch((err) =>
+          logDebug(`Transcription processing failed: ${err.message}`),
+        );
       }
       return true;
     }
@@ -1223,7 +1232,9 @@ const WayvoxIndicator = GObject.registerClass(
       refreshItem.connect("activate", () => {
         refreshItem.label.set_text(_("Refreshing..."));
         refreshItem.reactive = false;
-        this._refreshModelCache();
+        this._refreshModelCache().catch((e) =>
+          logDebug(`Model list refresh failed: ${e.message}`),
+        );
       });
       this._modelSection.menu.addMenuItem(refreshItem);
 
@@ -1348,7 +1359,9 @@ const WayvoxIndicator = GObject.registerClass(
       refreshItem.connect("activate", () => {
         refreshItem.label.set_text(_("Refreshing..."));
         refreshItem.reactive = false;
-        this._refreshLlmCache();
+        this._refreshLlmCache().catch((e) =>
+          logDebug(`LLM model list refresh failed: ${e.message}`),
+        );
       });
       this._llmModelSection.menu.addMenuItem(refreshItem);
 
