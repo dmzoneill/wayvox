@@ -95,6 +95,11 @@ DEFAULT_TONES = {
 }
 
 
+def _log_safe(value):
+    """Return value as a string with CR/LF escaped so it can't forge log lines."""
+    return str(value).replace("\r", "\\r").replace("\n", "\\n")
+
+
 def _model_dir(base_dir, model_name):
     """Return base_dir/model_name, refusing names that escape base_dir."""
     base = os.path.realpath(base_dir)
@@ -291,7 +296,7 @@ class ModelManager:
         if not os.path.exists(model_path):
             missing = f"Model {model_name} not found at {model_path}"
             raise FileNotFoundError(missing)
-        logger.info("Loading %s on %s (OpenVINO)", model_name, DEVICE)
+        logger.info("Loading %s on %s (OpenVINO)", _log_safe(model_name), DEVICE)
         # Stateful on NPU so GenAI 2025.4 does not stay on the static
         # pipeline. word_timestamps=True (WHISPER_NPU_WORD_TIMESTAMPS=1)
         # compiles the 447 token prompt slot. CACHE_DIR keeps that blob.
@@ -318,7 +323,7 @@ class ModelManager:
             source = model_name
         compute_type = _cuda_compute_type(cuda_device)
         loaded = "Loading %s on %s (faster-whisper, compute=%s)"
-        logger.info(loaded, model_name, DEVICE, compute_type)
+        logger.info(loaded, _log_safe(model_name), DEVICE, compute_type)
         return ENGINES.faster_whisper_cls(
             source,
             device=cuda_device,
