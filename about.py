@@ -92,7 +92,7 @@ def _padded_column():
     return box
 
 
-class About(_AboutBase):  # type: ignore[misc, valid-type]
+class About(_AboutBase):
     """GTK application that shows Wayvox hardware and library versions."""
 
     def __init__(self, report_text):
