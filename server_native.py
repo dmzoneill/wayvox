@@ -291,7 +291,8 @@ class ModelManager:
 
     def _load_openvino(self, model_name):
         """Build an OpenVINO WhisperPipeline for one installed model."""
-        assert ENGINES.openvino_genai is not None
+        if ENGINES.openvino_genai is None:
+            raise RuntimeError("OpenVINO GenAI is not installed")
         model_path = _model_dir(self.models_dir, model_name)
         if not os.path.exists(model_path):
             missing = f"Model {model_name} not found at {model_path}"
@@ -308,7 +309,8 @@ class ModelManager:
 
     def _load_faster_whisper(self, model_name):
         """Build a faster-whisper model for the selected device."""
-        assert ENGINES.faster_whisper_cls is not None
+        if ENGINES.faster_whisper_cls is None:
+            raise RuntimeError("faster-whisper is not installed")
         cuda_index = 0
         if ":" in DEVICE:
             cuda_index = int(DEVICE.split(":")[1])
@@ -504,7 +506,6 @@ class LLMManager:
     def load_model(self, model_name=None):
         """Load an LLM pipeline and return it."""
         self._require_openvino()
-        assert ENGINES.openvino_genai_for_llm is not None
         model_name = model_name or self.current_model
         if not model_name:
             raise ValueError("No LLM model configured")
