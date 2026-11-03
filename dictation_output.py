@@ -506,8 +506,10 @@ class TranscriptionHistory:
                 (text, time.time()),
             )
             conn.execute(
-                "DELETE FROM history WHERE id NOT IN "
-                "(SELECT id FROM history ORDER BY id DESC LIMIT ?)",
+                """
+                DELETE FROM history
+                WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)
+                """,
                 (self.max_items,),
             )
 
