@@ -469,8 +469,7 @@ def send_keys(scancode_str):
 def execute_voice_command(text):
     """Check if text matches a voice command and execute it. Returns True if handled."""
     normalized = text.strip().lower().rstrip(".!?,;")
-    if normalized.endswith(" please"):
-        normalized = normalized[:-7]
+    normalized = normalized.removesuffix(" please")
     for phrase, actions in VOICE_COMMANDS.items():
         if normalized == phrase:
             for action_type, action_val in actions:
@@ -507,7 +506,8 @@ class TranscriptionHistory:
                 (text, time.time()),
             )
             conn.execute(
-                "DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)",
+                "DELETE FROM history WHERE id NOT IN "
+                "(SELECT id FROM history ORDER BY id DESC LIMIT ?)",
                 (self.max_items,),
             )
 
