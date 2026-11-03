@@ -888,9 +888,11 @@ def _history_rows(limit):
     db_path = str(history_file())
     if not os.path.exists(db_path):
         return None
-    query = "SELECT text, timestamp FROM history ORDER BY id DESC LIMIT ?"
     with sqlite3.connect(db_path) as conn:
-        rows = conn.execute(query, (limit,)).fetchall()
+        rows = conn.execute(
+            "SELECT text, timestamp FROM history ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
     rows.reverse()
     return rows
 

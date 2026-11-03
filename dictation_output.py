@@ -501,14 +501,15 @@ class TranscriptionHistory:
 
     def add(self, text):
         """Insert a transcription and drop rows beyond *max_items*."""
-        kept_rows = "SELECT id FROM history ORDER BY id DESC LIMIT ?"
-        delete_sql = f"DELETE FROM history WHERE id NOT IN ({kept_rows})"
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "INSERT INTO history (text, timestamp) VALUES (?, ?)",
                 (text, time.time()),
             )
-            conn.execute(delete_sql, (self.max_items,))
+            conn.execute(
+                "DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)",
+                (self.max_items,),
+            )
 
     def recent(self, n=10):
         """Return the newest ``(text, timestamp)`` rows."""
