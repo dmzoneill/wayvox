@@ -1,6 +1,46 @@
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 import Soup from "gi://Soup";
+import St from "gi://St";
+import Clutter from "gi://Clutter";
+
+export function createBoxLayout(params = {}) {
+  const { vertical, ...common } = params;
+  const orientation = vertical === undefined
+    ? undefined
+    : vertical ? Clutter.Orientation.VERTICAL : Clutter.Orientation.HORIZONTAL;
+
+  try {
+    return new St.BoxLayout({
+      ...common,
+      ...(orientation === undefined ? {} : { orientation }),
+    });
+  } catch (e) {
+    return new St.BoxLayout({
+      ...common,
+      ...(vertical === undefined ? {} : { vertical }),
+    });
+  }
+}
+
+export function initBoxLayout(layout, params = {}) {
+  const { vertical, ...common } = params;
+  const orientation = vertical === undefined
+    ? undefined
+    : vertical ? Clutter.Orientation.VERTICAL : Clutter.Orientation.HORIZONTAL;
+
+  try {
+    St.BoxLayout.prototype._init.call(layout, {
+      ...common,
+      ...(orientation === undefined ? {} : { orientation }),
+    });
+  } catch (e) {
+    St.BoxLayout.prototype._init.call(layout, {
+      ...common,
+      ...(vertical === undefined ? {} : { vertical }),
+    });
+  }
+}
 
 Gio._promisify(Gio.Subprocess.prototype, "communicate_utf8_async");
 

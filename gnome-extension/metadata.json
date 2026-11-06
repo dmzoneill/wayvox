@@ -5,6 +5,6 @@
   "version": 1,
   "settings-schema": "org.gnome.shell.extensions.wayvox",
   "gettext-domain": "wayvox@dmz.oneill",
-  "shell-version": ["46", "47", "48", "49", "50", "51"],
+  "shell-version": ["46", "47", "48", "49", "50", "51", "52"],
   "url": "https://github.com/dmzoneill/wayvox"
 }

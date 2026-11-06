@@ -28,6 +28,8 @@ import {
   backspaceN,
   saveToFile,
   logDebug,
+  createBoxLayout,
+  initBoxLayout,
 } from "./utils.js";
 
 const DEVICES = ["auto", "NPU", "GPU", "CUDA", "CPU"];
@@ -107,7 +109,7 @@ const OVERLAY_PADDING = 100;
 const LanguageBuddyOverlay = GObject.registerClass(
   class LanguageBuddyOverlay extends St.BoxLayout {
     _init() {
-      super._init({
+      initBoxLayout(this, {
         vertical: true,
         style_class: "wayvox-overlay",
         reactive: true,
@@ -122,7 +124,7 @@ const LanguageBuddyOverlay = GObject.registerClass(
       this._cards = {};
       this._onSelect = onSelect;
 
-      const headerBox = new St.BoxLayout({ x_expand: true });
+      const headerBox = createBoxLayout({ x_expand: true });
       const headerLabel = new St.Label({
         text: _("Language Buddy"),
         style_class: "wayvox-overlay-header",
@@ -165,7 +167,7 @@ const LanguageBuddyOverlay = GObject.registerClass(
         track_hover: true,
       });
 
-      const cardBox = new St.BoxLayout({ vertical: true });
+      const cardBox = createBoxLayout({ vertical: true });
 
       const toneLabel = new St.Label({
         text: tone.charAt(0).toUpperCase() + tone.slice(1),
@@ -267,7 +269,7 @@ const LanguageBuddyOverlay = GObject.registerClass(
 const HistoryOverlay = GObject.registerClass(
   class HistoryOverlay extends St.BoxLayout {
     _init() {
-      super._init({
+      initBoxLayout(this, {
         vertical: true,
         style_class: "wayvox-overlay",
         reactive: true,
@@ -279,7 +281,7 @@ const HistoryOverlay = GObject.registerClass(
     show(items, timeoutSec = 10) {
       this.destroy_all_children();
 
-      const headerBox = new St.BoxLayout({ x_expand: true });
+      const headerBox = createBoxLayout({ x_expand: true });
       const headerLabel = new St.Label({
         text: _("Transcription History"),
         style_class: "wayvox-overlay-header",
@@ -302,7 +304,7 @@ const HistoryOverlay = GObject.registerClass(
           track_hover: true,
         });
 
-        const cardBox = new St.BoxLayout({ vertical: true });
+        const cardBox = createBoxLayout({ vertical: true });
 
         const ago = this._timeAgo(item.ts);
         const timeLabel = new St.Label({
