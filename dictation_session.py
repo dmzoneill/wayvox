@@ -271,6 +271,8 @@ async def _finalize_toggle(state, wav_bytes, port, delay_ms):
 
 async def _transcribe_hold(state, wav_bytes, port):
     """Transcribe a finished hold-mode recording."""
+    # whisper.cpp streaming endpoint keeps only its latest 30 seconds.
+    # Final takes must use batch transcription so full recordings survive.
     language = state.settings["language"] or None
     return await transcribe_batch(wav_bytes, port, language=language)
 
