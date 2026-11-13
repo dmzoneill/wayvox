@@ -254,8 +254,8 @@ def _wav_duration(wav_bytes):
 
 
 async def _finalize_toggle(state, wav_bytes, port, delay_ms):
-    """Apply the final whisper.cpp diff for a toggle recording."""
-    text = await transcribe_chunk(
+    """Apply the final full-audio diff for a toggle recording."""
+    text = await transcribe_batch(
         wav_bytes,
         port,
         language=state.settings["language"] or None,
@@ -272,8 +272,6 @@ async def _finalize_toggle(state, wav_bytes, port, delay_ms):
 async def _transcribe_hold(state, wav_bytes, port):
     """Transcribe a finished hold-mode recording."""
     language = state.settings["language"] or None
-    if state.settings["backend"] == "whisper-cpp":
-        return await transcribe_chunk(wav_bytes, port, language=language)
     return await transcribe_batch(wav_bytes, port, language=language)
 
 

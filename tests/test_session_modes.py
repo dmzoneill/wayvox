@@ -248,11 +248,14 @@ class TestFinalize:
         state.take.mode = "toggle"
         state.take.streamed_text = "hi"
         with (
-            patch.object(ds, "transcribe_chunk", AsyncMock(return_value="hi there")),
+            patch.object(ds, "transcribe_batch", AsyncMock(return_value="hi there")) as batch,
+            patch.object(ds, "transcribe_chunk", AsyncMock()) as chunk,
             patch.object(ds, "type_text_async", AsyncMock()) as typer,
         ):
-            _finalize(state, _wav(1.0))
+            _finalize(state, _wav(31.0))
         typer.assert_awaited_once_with(" there", delay_ms=4)
+        batch.assert_awaited_once()
+        chunk.assert_not_awaited()
         assert state.take.streamed_text == ""
 
     def test_toggle_cpp_empty(self):
@@ -260,11 +263,14 @@ class TestFinalize:
         state = _state(backend="whisper-cpp")
         state.take.mode = "toggle"
         with (
-            patch.object(ds, "transcribe_chunk", AsyncMock(return_value="")),
+            patch.object(ds, "transcribe_batch", AsyncMock(return_value="")) as batch,
+            patch.object(ds, "transcribe_chunk", AsyncMock()) as chunk,
             patch.object(ds, "type_text_async", AsyncMock()) as typer,
         ):
-            _finalize(state, _wav(1.0))
+            _finalize(state, _wav(31.0))
         typer.assert_not_awaited()
+        batch.assert_awaited_once()
+        chunk.assert_not_awaited()
         assert state.take.mode is None
 
     def test_hold_no_text(self):
@@ -288,7 +294,8 @@ class TestFinalize:
         )
         state.take.mode = "hold"
         with (
-            patch.object(ds, "transcribe_chunk", AsyncMock(return_value=" hi ")),
+            patch.object(ds, "transcribe_batch", AsyncMock(return_value=" hi ")) as batch,
+            patch.object(ds, "transcribe_chunk", AsyncMock()) as chunk,
             patch.object(ds, "format_dictation", side_effect=str.upper),
             patch.object(ds, "auto_punctuate", AsyncMock(return_value="HI.")),
             patch.object(ds, "translate_text", AsyncMock(return_value="SALUT.")),
@@ -297,7 +304,9 @@ class TestFinalize:
             patch.object(ds, "play_sound") as sound,
             patch.object(ds, "notify") as notify,
         ):
-            _finalize(state, _wav(1.0))
+            _finalize(state, _wav(31.0))
+        batch.assert_awaited_once()
+        chunk.assert_not_awaited()
         state.history.add.assert_called_once_with("SALUT.")
         assert state.previous.typed_text == "SALUT."
         assert state.previous.used_dbus is True
