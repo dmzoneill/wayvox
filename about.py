@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -44,10 +45,19 @@ def _dialog_errors():
     return errors
 
 
+def _http_urlopen(request, timeout):
+    """Open an HTTP or HTTPS URL, rejecting other schemes."""
+    parsed = urllib.parse.urlparse(request.full_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
+    opener = urllib.request.build_opener()
+    return opener.open(request, timeout=timeout)
+
+
 def fetch_report(url):
     """GET a /system report and fill in text when the server omitted it."""
     request = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=4) as response:
+    with _http_urlopen(request, timeout=4) as response:
         payload = json.loads(response.read().decode())
     if not isinstance(payload, dict):
         raise TypeError("server returned a non-object")

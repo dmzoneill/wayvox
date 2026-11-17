@@ -53,6 +53,15 @@ def fake_gtk():
     return gtk
 
 
+def _import_local_module(module_name):
+    """Import a first-party module under test by a literal, allow-listed name."""
+    if module_name == "about":
+        return importlib.import_module("about")
+    if module_name == "vocab_editor":
+        return importlib.import_module("vocab_editor")
+    raise ImportError(f"refusing to import unexpected module {module_name!r}")
+
+
 def import_with_fake_gtk(module_name):
     """Import *module_name* against fake gi modules; return (module, Gtk, Gdk)."""
     gtk = fake_gtk()
@@ -63,7 +72,7 @@ def import_with_fake_gtk(module_name):
     modules = {"gi": MagicMock(), "gi.repository": repository}
     with patch.dict(sys.modules, modules):
         sys.modules.pop(module_name, None)
-        module = importlib.import_module(module_name)
+        module = _import_local_module(module_name)
     return module, gtk, gdk
 
 
@@ -71,4 +80,4 @@ def import_without_gtk(module_name):
     """Import *module_name* while gi is unavailable."""
     with patch.dict(sys.modules, {"gi": None}):
         sys.modules.pop(module_name, None)
-        return importlib.import_module(module_name)
+        return _import_local_module(module_name)

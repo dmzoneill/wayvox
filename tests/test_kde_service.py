@@ -106,6 +106,16 @@ class TestServerUrl:
         assert url == "http://127.0.0.1:7777/x"
 
 
+def _patch_http_open(return_value=None, side_effect=None):
+    """Patch build_opener so http_post uses a fake opener.open()."""
+    opener = MagicMock()
+    if side_effect is not None:
+        opener.open.side_effect = side_effect
+    else:
+        opener.open.return_value = return_value
+    return patch("urllib.request.build_opener", return_value=opener), opener
+
+
 class TestHttpPost:
     """Checks that HTTP posts return JSON or None when the call fails."""
 
@@ -117,24 +127,24 @@ class TestHttpPost:
         mock_resp.__enter__ = lambda item: item
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp) as mocked:
+        ctx, opener = _patch_http_open(return_value=mock_resp)
+        with ctx:
             result = kde_svc.http_post("http://localhost:5000/test", {"key": "val"})
         assert result == response_data
-        mocked.assert_called_once()
+        opener.open.assert_called_once()
 
     def test_http_error(self):
         """An HTTP error status returns None."""
         error = urllib.error.HTTPError("http://x", 500, "Server Error", {}, None)
-        with patch("urllib.request.urlopen", side_effect=error):
+        ctx, _opener = _patch_http_open(side_effect=error)
+        with ctx:
             result = kde_svc.http_post("http://x", {})
         assert result is None
 
     def test_timeout(self):
         """A URL error such as a timeout returns None."""
-        with patch(
-            "urllib.request.urlopen",
-            side_effect=urllib.error.URLError("timed out"),
-        ):
+        ctx, _opener = _patch_http_open(side_effect=urllib.error.URLError("timed out"))
+        with ctx:
             result = kde_svc.http_post("http://x", {})
         assert result is None
 
@@ -145,16 +155,15 @@ class TestHttpPost:
         mock_resp.__enter__ = lambda item: item
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp):
+        ctx, _opener = _patch_http_open(return_value=mock_resp)
+        with ctx:
             result = kde_svc.http_post("http://x", {})
         assert result is None
 
     def test_connection_refused(self):
         """A refused connection returns None."""
-        with patch(
-            "urllib.request.urlopen",
-            side_effect=ConnectionRefusedError("refused"),
-        ):
+        ctx, _opener = _patch_http_open(side_effect=ConnectionRefusedError("refused"))
+        with ctx:
             result = kde_svc.http_post("http://x", {})
         assert result is None
 
