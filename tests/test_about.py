@@ -29,7 +29,7 @@ class TestReports:
         """Fetch report fills text."""
         about = about_gtk[0]
         with (
-            patch.object(about.urllib.request, "urlopen", return_value=_response({})),
+            patch.object(about, "_http_urlopen", return_value=_response({})),
             patch.object(about.diagnostics, "format_report", return_value="TEXT"),
         ):
             report = about.fetch_report("http://h/system")
@@ -39,7 +39,7 @@ class TestReports:
         """Fetch report keeps server text."""
         about = about_gtk[0]
         reply = _response({"text": "server"})
-        with patch.object(about.urllib.request, "urlopen", return_value=reply):
+        with patch.object(about, "_http_urlopen", return_value=reply):
             assert about.fetch_report("http://h")["text"] == "server"
 
     def test_fetch_report_rejects_list(self, about_gtk):
@@ -47,7 +47,7 @@ class TestReports:
         about = about_gtk[0]
         reply = _response([1])
         with (
-            patch.object(about.urllib.request, "urlopen", return_value=reply),
+            patch.object(about, "_http_urlopen", return_value=reply),
             pytest.raises(TypeError),
         ):
             about.fetch_report("http://h")
@@ -57,7 +57,7 @@ class TestReports:
         about = about_gtk[0]
         down = urllib.error.URLError("refused")
         with (
-            patch.object(about.urllib.request, "urlopen", side_effect=down),
+            patch.object(about, "_http_urlopen", side_effect=down),
             patch.object(about.diagnostics, "collect", return_value={}),
             patch.object(about.diagnostics, "format_report", return_value="LOCAL"),
         ):

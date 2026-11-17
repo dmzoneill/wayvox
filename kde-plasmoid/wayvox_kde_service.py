@@ -157,7 +157,8 @@ def http_post(url, body):
         parsed = urllib.parse.urlparse(request.full_url)
         if parsed.scheme not in {"http", "https"}:
             raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
-        with urllib.request.urlopen(request, timeout=15) as response:
+        opener = urllib.request.build_opener()
+        with opener.open(request, timeout=15) as response:
             return json.loads(response.read())
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         log.error("HTTP POST %s failed: %s", url, exc)

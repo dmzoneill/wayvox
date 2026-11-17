@@ -50,7 +50,8 @@ def _http_urlopen(request, timeout):
     parsed = urllib.parse.urlparse(request.full_url)
     if parsed.scheme not in {"http", "https"}:
         raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
-    return urllib.request.urlopen(request, timeout=timeout)
+    opener = urllib.request.build_opener()
+    return opener.open(request, timeout=timeout)
 
 
 def fetch_report(url):
