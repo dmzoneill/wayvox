@@ -14,6 +14,7 @@ import logging
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 from subprocess import CalledProcessError, TimeoutExpired
 from typing import Any
@@ -153,9 +154,12 @@ def http_post(url, body):
         method="POST",
     )
     try:
+        parsed = urllib.parse.urlparse(request.full_url)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
         with urllib.request.urlopen(request, timeout=15) as response:
             return json.loads(response.read())
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
         log.error("HTTP POST %s failed: %s", url, exc)
         return None
 

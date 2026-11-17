@@ -848,7 +848,7 @@ def _log_failover(reason, dropped, exc):
             )
         log.warning(
             "Failover: NPU Whisper prompt slot is 4 tokens, shorter than %s. "
-            "Error: %s. Dropped %s for the rest of this process so the next "
+            "The exception was %s. Dropped %s for the rest of this process so the next "
             "utterance skips the failed inference. "
             "Regex replacements in %s still correct misheard terms. "
             "%s"
