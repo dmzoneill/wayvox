@@ -584,7 +584,7 @@ def configure_backend(device):
     The first transcription tries it. A rejection fails over to regex and
     logs the upgrade that enables decoder bias.
     """
-    setattr(STATE, "backend_device", str(device or ""))
+    STATE.backend_device = str(device or "")
     if not STATE.backend_device.upper().startswith("NPU"):
         return
     wide = npu_prompt_slot_enabled()
@@ -683,9 +683,9 @@ def load_whisper_pipeline(factory, model_path, device):
             continue
         break
     enabled = bool(kwargs.get("word_timestamps"))
-    setattr(STATE, "compiled_word_timestamps", enabled)
+    STATE.compiled_word_timestamps = enabled
     mode = "stateful" if npu and "STATIC_PIPELINE" in kwargs else "default"
-    setattr(STATE, "pipeline_mode", mode)
+    STATE.pipeline_mode = mode
     if npu:
         if STATE.compiled_word_timestamps:
             log.info(
@@ -925,7 +925,7 @@ def generate_biased(fn, *args, **kwargs):
             _log_failover(reason, dropped, exc)
             continue
         if any(key in attempt for key in _BIAS_KEYS):
-            setattr(STATE, "bias_confirmed", True)
+            STATE.bias_confirmed = True
         return result
 
 
