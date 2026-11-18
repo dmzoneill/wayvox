@@ -23,8 +23,8 @@ def test_bind_host_defaults_to_loopback(monkeypatch):
 
 def test_bind_host_env_and_override(monkeypatch):
     """Env var and explicit argument override the bind host."""
-    monkeypatch.setenv("WAYVOX_BIND_HOST", "0.0.0.0")
-    assert server_security.bind_host() == "0.0.0.0"
+    monkeypatch.setenv("WAYVOX_BIND_HOST", "10.1.2.3")
+    assert server_security.bind_host() == "10.1.2.3"
     assert server_security.bind_host("192.168.1.5") == "192.168.1.5"
 
 
