@@ -889,10 +889,10 @@ def _history_rows(limit):
     if not os.path.exists(db_path):
         return None
     with sqlite3.connect(db_path) as conn:
-        rows = conn.execute(
-            "SELECT text, timestamp FROM history ORDER BY id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        cursor = conn.execute(
+            "SELECT text, timestamp FROM history ORDER BY id DESC",
+        )
+        rows = cursor.fetchall() if limit < 0 else cursor.fetchmany(limit)
     rows.reverse()
     return rows
 
