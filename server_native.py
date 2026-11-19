@@ -2,6 +2,7 @@
 
 import datetime
 import io
+import itertools
 import json
 import logging
 import os
@@ -892,7 +893,7 @@ def _history_rows(limit):
         cursor = conn.execute(
             "SELECT text, timestamp FROM history ORDER BY id DESC",
         )
-        rows = cursor.fetchall() if limit < 0 else cursor.fetchmany(limit)
+        rows = list(itertools.islice(cursor, None if limit < 0 else limit))
     rows.reverse()
     return rows
 
