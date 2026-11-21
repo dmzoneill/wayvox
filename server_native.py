@@ -2,6 +2,7 @@
 
 import datetime
 import io
+import itertools
 import json
 import logging
 import os
@@ -889,10 +890,10 @@ def _history_rows(limit):
     if not os.path.exists(db_path):
         return None
     with sqlite3.connect(db_path) as conn:
-        rows = conn.execute(
-            "SELECT text, timestamp FROM history ORDER BY id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        cursor = conn.execute(
+            "SELECT text, timestamp FROM history ORDER BY id DESC",
+        )
+        rows = list(itertools.islice(cursor, None if limit < 0 else limit))
     rows.reverse()
     return rows
 
@@ -938,7 +939,7 @@ def _history_srt(rows):
 def export_history():
     """Download recent transcription history as JSON, Markdown, or SRT."""
     fmt = request.args.get("format", "json")
-    limit = request.args.get("limit", "50", type=int)
+    limit = request.args.get("limit", 50, type=int)
     rows = _history_rows(limit)
     if rows is None:
         return jsonify({"error": "No history database found"}), 404

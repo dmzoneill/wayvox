@@ -440,6 +440,47 @@ class TestHistoryExportRoute:
         data = resp.get_json()
         assert data["count"] == 3
 
+    @staticmethod
+    def _seed_history(tmp_path, count):
+        """Create a history database holding ``count`` sequential entries."""
+        db_path = str(tmp_path / "history.db")
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "CREATE TABLE history (id INTEGER PRIMARY KEY, text TEXT, timestamp REAL)",
+            )
+            for i in range(count):
+                conn.execute(
+                    "INSERT INTO history (text, timestamp) VALUES (?, ?)",
+                    (f"entry {i}", 1700000000.0 + i),
+                )
+
+    def test_default_limit_without_param(self, client, tmp_path):
+        """Export without a limit param returns the 50 most recent entries."""
+        self._seed_history(tmp_path, 60)
+        with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
+            resp = client.get("/history/export")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["count"] == 50
+        assert data["items"][0]["text"] == "entry 10"
+        assert data["items"][-1]["text"] == "entry 59"
+
+    def test_invalid_limit_falls_back_to_default(self, client, tmp_path):
+        """A non-integer limit falls back to the default of 50."""
+        self._seed_history(tmp_path, 60)
+        with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
+            resp = client.get("/history/export?limit=abc")
+        assert resp.status_code == 200
+        assert resp.get_json()["count"] == 50
+
+    def test_negative_limit_returns_all(self, client, tmp_path):
+        """A negative limit returns every entry, matching SQLite LIMIT -1."""
+        self._seed_history(tmp_path, 60)
+        with patch.dict(os.environ, {"WAYVOX_CONFIG_DIR": str(tmp_path)}, clear=False):
+            resp = client.get("/history/export?limit=-1")
+        assert resp.status_code == 200
+        assert resp.get_json()["count"] == 60
+
 
 # ===================================================================
 #  Edge cases and integration-style tests
